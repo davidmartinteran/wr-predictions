@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Porra Mundial 2026 — Pronósticos · Fase de grupos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body, #page { height: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(27,158,91,0.05), transparent 60%),
+      #0a0a0b;
+    color: #f4f4f5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+
+  /* Page chrome (centers the phone) */
+  #page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  /* Phone frame — 390x844, dynamic island, subtle bezel */
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #0a0a0b;
+    border-radius: 44px;
+    border: 1px solid rgb(39 39 42 / 1);
+    box-shadow:
+      0 0 0 6px #1a1a1d,
+      0 0 0 7px rgba(255,255,255,0.04),
+      0 30px 80px -20px rgba(0,0,0,0.6);
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .phone::before {
+    content: "";
+    position: absolute;
+    top: 11px; left: 50%;
+    transform: translateX(-50%);
+    width: 120px; height: 34px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 50;
+    pointer-events: none;
+  }
+  #root { height: 100%; }
+
+  /* Tap highlight off */
+  button, input { -webkit-tap-highlight-color: transparent; }
+  input[type=tel]::-webkit-outer-spin-button, input[type=tel]::-webkit-inner-spin-button { display: none; }
+</style>
+</head>
+<body>
+<div id="page">
+  <div class="phone" data-screen-label="01 Pronósticos · Fase de grupos">
+    <div id="root"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
