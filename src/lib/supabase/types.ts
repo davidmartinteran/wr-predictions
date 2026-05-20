@@ -1,11 +1,598 @@
-// Auto-generated with: npx supabase gen types typescript --project-id <id> > src/lib/supabase/types.ts
-// Placeholder until Supabase project is created and migrations run.
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
-    Tables: Record<string, never>;
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-  };
-};
+    Tables: {
+      goal_events: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_own_goal: boolean
+          match_id: string
+          minute: number | null
+          player_name: string
+          pool_id: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_own_goal?: boolean
+          match_id: string
+          minute?: number | null
+          player_name: string
+          pool_id: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_own_goal?: boolean
+          match_id?: string
+          minute?: number | null
+          player_name?: string
+          pool_id?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_events_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_events_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_events_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matches: {
+        Row: {
+          api_fixture_id: number | null
+          away_score: number | null
+          away_team: string | null
+          created_at: string | null
+          finished: boolean
+          group_letter: string | null
+          home_score: number | null
+          home_team: string | null
+          id: string
+          kickoff: string
+          match_number: number
+          pool_id: string
+          source: string | null
+          stage: string
+        }
+        Insert: {
+          api_fixture_id?: number | null
+          away_score?: number | null
+          away_team?: string | null
+          created_at?: string | null
+          finished?: boolean
+          group_letter?: string | null
+          home_score?: number | null
+          home_team?: string | null
+          id?: string
+          kickoff: string
+          match_number: number
+          pool_id: string
+          source?: string | null
+          stage: string
+        }
+        Update: {
+          api_fixture_id?: number | null
+          away_score?: number | null
+          away_team?: string | null
+          created_at?: string | null
+          finished?: boolean
+          group_letter?: string | null
+          home_score?: number | null
+          home_team?: string | null
+          id?: string
+          kickoff?: string
+          match_number?: number
+          pool_id?: string
+          source?: string | null
+          stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_away_team_fkey"
+            columns: ["away_team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_home_team_fkey"
+            columns: ["home_team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      participations: {
+        Row: {
+          display_name: string
+          is_admin: boolean
+          joined_at: string | null
+          pool_id: string
+          user_id: string
+        }
+        Insert: {
+          display_name: string
+          is_admin?: boolean
+          joined_at?: string | null
+          pool_id: string
+          user_id: string
+        }
+        Update: {
+          display_name?: string
+          is_admin?: boolean
+          joined_at?: string | null
+          pool_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "participations_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pools: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          deadline: string
+          id: string
+          name: string
+          scoring_frozen_at: string | null
+          scoring_rules: Json
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          deadline: string
+          id?: string
+          name: string
+          scoring_frozen_at?: string | null
+          scoring_rules?: Json
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          deadline?: string
+          id?: string
+          name?: string
+          scoring_frozen_at?: string | null
+          scoring_rules?: Json
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      predictions_extra: {
+        Row: {
+          created_at: string | null
+          kind: string
+          pool_id: string
+          updated_at: string | null
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string | null
+          kind: string
+          pool_id: string
+          updated_at?: string | null
+          user_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string | null
+          kind?: string
+          pool_id?: string
+          updated_at?: string | null
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_extra_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predictions_group: {
+        Row: {
+          created_at: string | null
+          first_team: string
+          group_letter: string
+          pool_id: string
+          second_team: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          first_team: string
+          group_letter: string
+          pool_id: string
+          second_team: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          first_team?: string
+          group_letter?: string
+          pool_id?: string
+          second_team?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_group_first_team_fkey"
+            columns: ["first_team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_group_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_group_second_team_fkey"
+            columns: ["second_team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predictions_knockout: {
+        Row: {
+          created_at: string | null
+          pool_id: string
+          slot: number
+          stage: string
+          team_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          pool_id: string
+          slot: number
+          stage: string
+          team_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          pool_id?: string
+          slot?: number
+          stage?: string
+          team_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_knockout_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_knockout_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predictions_match: {
+        Row: {
+          away_score: number
+          created_at: string | null
+          home_score: number
+          id: string
+          match_id: string
+          pool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          away_score: number
+          created_at?: string | null
+          home_score: number
+          id?: string
+          match_id: string
+          pool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          away_score?: number
+          created_at?: string | null
+          home_score?: number
+          id?: string
+          match_id?: string
+          pool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_match_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predictions_match_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scores: {
+        Row: {
+          category: string
+          exact_hits: number
+          points: number
+          pool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          exact_hits?: number
+          points?: number
+          pool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          exact_hits?: number
+          points?: number
+          pool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scores_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          code: string
+          flag_emoji: string | null
+          group_letter: string
+          id: string
+          name: string
+          pool_id: string
+        }
+        Insert: {
+          code: string
+          flag_emoji?: string | null
+          group_letter: string
+          id?: string
+          name: string
+          pool_id: string
+        }
+        Update: {
+          code?: string
+          flag_emoji?: string | null
+          group_letter?: string
+          id?: string
+          name?: string
+          pool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
