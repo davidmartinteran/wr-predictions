@@ -57,6 +57,13 @@ export default async function PredictionsPage() {
     .eq("user_id", user.id)
     .eq("pool_id", poolId);
 
+  // Get first scorer predictions
+  const { data: firstScorerPreds } = await supabase
+    .from("predictions_first_scorer")
+    .select("match_id, player_name")
+    .eq("user_id", user.id)
+    .eq("pool_id", poolId);
+
   const formattedMatches = (matches ?? []).map((m) => ({
     id: m.id,
     group_letter: m.group_letter,
@@ -74,6 +81,10 @@ export default async function PredictionsPage() {
         match_id: p.match_id,
         home_score: p.home_score,
         away_score: p.away_score,
+      }))}
+      firstScorerPredictions={(firstScorerPreds ?? []).map((p) => ({
+        match_id: p.match_id,
+        player_name: p.player_name,
       }))}
       disabled={disabled}
     />

@@ -22,6 +22,10 @@ type MatchCardProps = {
   awayScore: number | null;
   disabled?: boolean;
   onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  isSpainMatch?: boolean;
+  firstScorer?: string;
+  onFirstScorerChange?: (matchId: string, playerName: string) => void;
+  complete?: boolean;
 };
 
 export function MatchCard({
@@ -34,8 +38,12 @@ export function MatchCard({
   awayScore,
   disabled,
   onScoreChange,
+  isSpainMatch,
+  firstScorer,
+  onFirstScorerChange,
+  complete: completeProp,
 }: MatchCardProps) {
-  const complete = homeScore !== null && awayScore !== null;
+  const complete = completeProp ?? (homeScore !== null && awayScore !== null);
 
   const date = new Date(kickoff);
   const day = date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
@@ -99,6 +107,35 @@ export function MatchCard({
           side="away"
         />
       </div>
+
+      {isSpainMatch && onFirstScorerChange && (
+        <div className="mt-2.5 pt-2.5 border-t border-zinc-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-400">
+              <span>⚽</span>
+              <span className="uppercase tracking-[0.1em]">Primer gol · Bonus España</span>
+            </div>
+            <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+              +10 PTS
+            </span>
+          </div>
+          <input
+            type="text"
+            value={firstScorer ?? ""}
+            placeholder="Jugador..."
+            onChange={(e) => onFirstScorerChange(matchId, e.target.value)}
+            disabled={disabled}
+            className={cn(
+              "w-full h-10 rounded-lg bg-zinc-950 border text-[13px] text-zinc-100 px-3",
+              "placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/25",
+              "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
+              firstScorer
+                ? "border-primary/60"
+                : "border-zinc-800"
+            )}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,14 @@ export type ScoringRules = {
   champion: number;
   top_scorer: number;
   best_player: number;
+  top_assister: number;
+  most_goals_team: number;
+  most_conceded_team: number;
+  runner_up: number;
+  third_place: number;
+  spain_elim_round: number;
+  spain_elim_rival: number;
+  first_scorer_esp: number;
 };
 
 export type MatchPrediction = {
@@ -37,8 +45,22 @@ export type KnockoutPrediction = {
 };
 
 export type ExtraPrediction = {
-  kind: "TOP_SCORER" | "BEST_PLAYER";
+  kind:
+    | "TOP_SCORER"
+    | "BEST_PLAYER"
+    | "TOP_ASSISTER"
+    | "MOST_GOALS_TEAM"
+    | "MOST_CONCEDED_TEAM"
+    | "RUNNER_UP"
+    | "THIRD_PLACE"
+    | "SPAIN_ELIM_ROUND"
+    | "SPAIN_ELIM_RIVAL";
   value: string;
+};
+
+export type FirstScorerPrediction = {
+  match_id: string;
+  player_name: string;
 };
 
 type MatchScore = { points: number; exact_hit: boolean };
@@ -104,6 +126,18 @@ export function scoreKnockout(
   return rules[ruleKey] as number;
 }
 
+const EXTRA_KIND_RULES: Record<ExtraPrediction["kind"], keyof ScoringRules> = {
+  TOP_SCORER: "top_scorer",
+  BEST_PLAYER: "best_player",
+  TOP_ASSISTER: "top_assister",
+  MOST_GOALS_TEAM: "most_goals_team",
+  MOST_CONCEDED_TEAM: "most_conceded_team",
+  RUNNER_UP: "runner_up",
+  THIRD_PLACE: "third_place",
+  SPAIN_ELIM_ROUND: "spain_elim_round",
+  SPAIN_ELIM_RIVAL: "spain_elim_rival",
+};
+
 export function scoreExtra(
   pred: ExtraPrediction,
   actualValue: string,
@@ -111,7 +145,15 @@ export function scoreExtra(
 ): number {
   const match = pred.value.toLowerCase().trim() === actualValue.toLowerCase().trim();
   if (!match) return 0;
-  return pred.kind === "TOP_SCORER" ? rules.top_scorer : rules.best_player;
+  const ruleKey = EXTRA_KIND_RULES[pred.kind];
+  return rules[ruleKey] as number;
+}
+
+export function scoreFirstScorer(
+  predPlayerName: string,
+  actualFirstScorerName: string
+): boolean {
+  return predPlayerName.toLowerCase().trim() === actualFirstScorerName.toLowerCase().trim();
 }
 
 type TotalInput = {
@@ -119,6 +161,7 @@ type TotalInput = {
   groupQualifiers: { points: number }[];
   knockout: number[];
   extras: number[];
+  firstScorerEsp: number[];
 };
 
 export function calculateTotal(input: TotalInput) {
@@ -126,6 +169,7 @@ export function calculateTotal(input: TotalInput) {
   const group_qualifiers = input.groupQualifiers.reduce((s, g) => s + g.points, 0);
   const knockout = input.knockout.reduce((s, k) => s + k, 0);
   const extras = input.extras.reduce((s, e) => s + e, 0);
+  const first_scorer_esp = input.firstScorerEsp.reduce((s, f) => s + f, 0);
   const exact_hits = input.groupMatches.filter((m) => m.exact_hit).length;
 
   return {
@@ -133,7 +177,8 @@ export function calculateTotal(input: TotalInput) {
     group_qualifiers,
     knockout,
     extras,
-    total: group_matches + group_qualifiers + knockout + extras,
+    first_scorer_esp,
+    total: group_matches + group_qualifiers + knockout + extras + first_scorer_esp,
     exact_hits,
   };
 }

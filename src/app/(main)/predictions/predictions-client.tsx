@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useCallback, useRef, useTransition, useMemo } from "react";
-import { Lock, Check } from "lucide-react";
+import { Lock, Check, LayoutGrid, GitBranch, Star } from "lucide-react";
 import { MatchCard } from "@/components/predictions/match-card";
 import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
-import { savePrediction } from "./actions";
+import { savePrediction, saveFirstScorer } from "./actions";
 import { cn } from "@/lib/utils";
-import { useMediaQuery } from "@/hooks/use-media-query";
 import { TeamFlag } from "@/components/team-flag";
+
+type Section = "groups" | "bracket" | "extras";
 
 type Team = {
   id: string;
@@ -32,10 +33,16 @@ type Prediction = {
   away_score: number;
 };
 
+type FirstScorerPrediction = {
+  match_id: string;
+  player_name: string;
+};
+
 type Props = {
   poolId: string;
   matches: Match[];
   predictions: Prediction[];
+  firstScorerPredictions: FirstScorerPrediction[];
   disabled: boolean;
 };
 
@@ -92,7 +99,12 @@ function computeStandings(
   return { rows, counted, total: groupMatches.length };
 }
 
-export function PredictionsClient({ poolId, matches, predictions, disabled }: Props) {
+function isSpainMatch(match: Match): boolean {
+  return match.home_team_data.code === "ESP" || match.away_team_data.code === "ESP";
+}
+
+export function PredictionsClient({ poolId, matches, predictions, firstScorerPredictions, disabled }: Props) {
+  const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
   const [scores, setScores] = useState<Record<string, { home: number | null; away: number | null }>>(() => {
     const initial: Record<string, { home: number | null; away: number | null }> = {};
@@ -101,39 +113,42 @@ export function PredictionsClient({ poolId, matches, predictions, disabled }: Pr
     }
     return initial;
   });
+  const [firstScorers, setFirstScorers] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const p of firstScorerPredictions) {
+      initial[p.match_id] = p.player_name;
+    }
+    return initial;
+  });
   const [, startTransition] = useTransition();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const firstScorerTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const groupMatches = matches
     .filter((m) => m.group_letter === activeGroup)
     .sort((a, b) => a.match_number - b.match_number);
 
-  const totalMatches = matches.length;
-  const completedCount = Object.values(scores).filter(
-    (s) => s.home !== null && s.away !== null
-  ).length;
-
-  const groupFilled = groupMatches.filter((m) => {
+  const isMatchComplete = useCallback((m: Match) => {
     const s = scores[m.id];
-    return s && s.home !== null && s.away !== null;
-  }).length;
+    if (!s || s.home === null || s.away === null) return false;
+    if (isSpainMatch(m) && !firstScorers[m.id]?.trim()) return false;
+    return true;
+  }, [scores, firstScorers]);
+
+  const totalMatches = matches.length;
+  const completedCount = matches.filter(isMatchComplete).length;
+
+  const groupFilled = groupMatches.filter(isMatchComplete).length;
 
   const groupComplete = useCallback((group: string) => {
     const gm = matches.filter((m) => m.group_letter === group);
-    return gm.every((m) => {
-      const s = scores[m.id];
-      return s && s.home !== null && s.away !== null;
-    });
-  }, [matches, scores]);
+    return gm.every(isMatchComplete);
+  }, [matches, isMatchComplete]);
 
   const groupFilledCount = useCallback((group: string) => {
     const gm = matches.filter((m) => m.group_letter === group);
-    return gm.filter((m) => {
-      const s = scores[m.id];
-      return s && s.home !== null && s.away !== null;
-    }).length;
-  }, [matches, scores]);
+    return gm.filter(isMatchComplete).length;
+  }, [matches, isMatchComplete]);
 
   const standings = useMemo(
     () => computeStandings(activeGroup, matches, scores),
@@ -163,6 +178,30 @@ export function PredictionsClient({ poolId, matches, predictions, disabled }: Pr
     [poolId]
   );
 
+  const handleFirstScorerChange = useCallback(
+    (matchId: string, playerName: string) => {
+      setFirstScorers((prev) => ({ ...prev, [matchId]: playerName }));
+
+      if (firstScorerTimers.current[matchId]) {
+        clearTimeout(firstScorerTimers.current[matchId]);
+      }
+
+      const trimmed = playerName.trim();
+      if (trimmed.length > 0) {
+        firstScorerTimers.current[matchId] = setTimeout(() => {
+          startTransition(async () => {
+            await saveFirstScorer({
+              match_id: matchId,
+              pool_id: poolId,
+              player_name: trimmed,
+            });
+          });
+        }, 800);
+      }
+    },
+    [poolId]
+  );
+
   const goNextGroup = useCallback(() => {
     const idx = GROUPS.indexOf(activeGroup);
     if (idx < GROUPS.length - 1) {
@@ -170,172 +209,374 @@ export function PredictionsClient({ poolId, matches, predictions, disabled }: Pr
     }
   }, [activeGroup]);
 
-  if (isDesktop) {
-    return <DesktopLayout
-      activeGroup={activeGroup}
-      setActiveGroup={setActiveGroup}
-      groupMatches={groupMatches}
-      matches={matches}
-      scores={scores}
-      completedCount={completedCount}
-      totalMatches={totalMatches}
-      groupFilled={groupFilled}
-      groupComplete={groupComplete}
-      groupFilledCount={groupFilledCount}
-      standings={standings}
-      disabled={disabled}
-      handleScoreChange={handleScoreChange}
-      goNextGroup={goNextGroup}
-    />;
-  }
+  const goToBracket = useCallback(() => {
+    setActiveSection("bracket");
+  }, []);
+
+  const allGroupsComplete = completedCount === totalMatches;
+
+  const sectionCounts = useMemo(() => ({
+    groups: { filled: completedCount, total: totalMatches },
+    bracket: { filled: 0, total: 31 },
+    extras: { filled: 0, total: 9 },
+  }), [completedCount, totalMatches]);
+
+  const sharedProps = {
+    activeSection,
+    setActiveSection,
+    sectionCounts,
+    allGroupsComplete,
+    activeGroup,
+    setActiveGroup,
+    groupMatches,
+    matches,
+    scores,
+    firstScorers,
+    completedCount,
+    totalMatches,
+    groupFilled,
+    groupComplete,
+    isMatchComplete,
+    standings,
+    disabled,
+    handleScoreChange,
+    handleFirstScorerChange,
+    goNextGroup,
+    goToBracket,
+  };
 
   return (
-    <MobileLayout
-      activeGroup={activeGroup}
-      setActiveGroup={setActiveGroup}
-      groupMatches={groupMatches}
-      scores={scores}
-      completedCount={completedCount}
-      totalMatches={totalMatches}
-      groupFilled={groupFilled}
-      groupComplete={groupComplete}
-      standings={standings}
-      disabled={disabled}
-      handleScoreChange={handleScoreChange}
-      goNextGroup={goNextGroup}
-    />
+    <>
+      <div className="contents lg:hidden">
+        <MobileLayout {...sharedProps} />
+      </div>
+      <div className="hidden lg:contents">
+        <DesktopLayout {...sharedProps} groupFilledCount={groupFilledCount} />
+      </div>
+    </>
   );
 }
 
 // ─── Mobile Layout ───────────────────────────────────────────
 
+type SectionCounts = {
+  groups: { filled: number; total: number };
+  bracket: { filled: number; total: number };
+  extras: { filled: number; total: number };
+};
+
 function MobileLayout({
+  activeSection,
+  setActiveSection,
+  sectionCounts,
+  allGroupsComplete,
   activeGroup,
   setActiveGroup,
   groupMatches,
   scores,
+  firstScorers,
   completedCount,
   totalMatches,
   groupFilled,
   groupComplete,
+  isMatchComplete,
   standings,
   disabled,
   handleScoreChange,
+  handleFirstScorerChange,
   goNextGroup,
+  goToBracket,
 }: {
+  activeSection: Section;
+  setActiveSection: (s: Section) => void;
+  sectionCounts: SectionCounts;
+  allGroupsComplete: boolean;
   activeGroup: string;
   setActiveGroup: (g: string) => void;
   groupMatches: Match[];
   scores: Record<string, { home: number | null; away: number | null }>;
+  firstScorers: Record<string, string>;
   completedCount: number;
   totalMatches: number;
   groupFilled: number;
   groupComplete: (g: string) => boolean;
+  isMatchComplete: (m: Match) => boolean;
   standings: ReturnType<typeof computeStandings>;
   disabled: boolean;
   handleScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  handleFirstScorerChange: (matchId: string, playerName: string) => void;
   goNextGroup: () => void;
+  goToBracket: () => void;
 }) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-5 pt-2 pb-3 border-b border-zinc-800/80 shrink-0">
-        <div className="flex items-baseline justify-between mb-2.5">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-              Pronósticos
-            </div>
-            <h1 className="text-[20px] font-semibold text-zinc-50 leading-tight mt-0.5">
-              Fase de grupos
-            </h1>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
+            Pronósticos · Mundial 2026
           </div>
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
             <Lock className="w-3 h-3" />
             <span>Hasta 11 jun</span>
           </div>
         </div>
-        <ProgressBar current={completedCount} total={totalMatches} />
-      </div>
 
-      {/* Group tabs */}
-      <div className="border-b border-zinc-800/80 shrink-0">
-        <div className="flex overflow-x-auto scrollbar-none px-3 gap-1">
-          {GROUPS.map((g) => {
-            const done = groupComplete(g);
-            const active = g === activeGroup;
-            return (
-              <button
-                key={g}
-                onClick={() => setActiveGroup(g)}
-                className={cn(
-                  "relative shrink-0 px-3.5 py-3 text-[13px] font-medium transition-colors",
-                  active ? "text-zinc-50" : "text-zinc-500"
-                )}
-              >
-                Grupo {g}
-                {done && (
-                  <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full ml-1.5 align-middle bg-primary">
-                    <Check className="w-2.5 h-2.5 text-zinc-950" />
-                  </span>
-                )}
-                {active && (
-                  <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-zinc-50" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Match list */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-3 pb-52 min-h-0">
-        <div className="flex items-center justify-between mb-2.5 px-1">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-            {groupMatches.length} partidos · Grupo {activeGroup}
-          </div>
-          <div className="text-[11px] text-zinc-500 tabular-nums">
-            {groupFilled}/{groupMatches.length}
-          </div>
-        </div>
-        <div className="space-y-2.5">
-          {groupMatches.map((match) => (
-            <MatchCard
-              key={match.id}
-              matchId={match.id}
-              matchday={getMatchday(match.match_number)}
-              homeTeam={match.home_team_data}
-              awayTeam={match.away_team_data}
-              kickoff={match.kickoff}
-              homeScore={scores[match.id]?.home ?? null}
-              awayScore={scores[match.id]?.away ?? null}
-              disabled={disabled}
-              onScoreChange={handleScoreChange}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Fixed bottom section: button + standings, above BottomNav */}
-      <div className="fixed bottom-16 inset-x-0 z-40">
-        {activeGroup !== "L" && (
-          <div className="px-4 pb-2">
-            <button
-              onClick={goNextGroup}
-              className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              Siguiente grupo
-            </button>
-          </div>
-        )}
-        <div className="border-t border-zinc-800/80 bg-zinc-900/70 backdrop-blur px-4 py-2">
-          <StandingsStrip
-            groupId={activeGroup}
-            rows={standings.rows}
-            counted={standings.counted}
-            total={standings.total}
+        {/* Section tabs */}
+        <div className="grid grid-cols-3 gap-1.5">
+          <MobileSectionPill
+            active={activeSection === "groups"}
+            icon={<LayoutGrid className="w-3.5 h-3.5" />}
+            label="Grupos"
+            count={`${sectionCounts.groups.filled}/${sectionCounts.groups.total}`}
+            color="#1B9E5B"
+            onClick={() => setActiveSection("groups")}
+          />
+          <MobileSectionPill
+            active={activeSection === "bracket"}
+            icon={<GitBranch className="w-3.5 h-3.5" />}
+            label="Bracket"
+            count={`${sectionCounts.bracket.filled}/${sectionCounts.bracket.total}`}
+            color="#A855F7"
+            locked
+            onClick={() => setActiveSection("bracket")}
+          />
+          <MobileSectionPill
+            active={activeSection === "extras"}
+            icon={<Star className="w-3.5 h-3.5" />}
+            label="Extras"
+            count={`${sectionCounts.extras.filled}/${sectionCounts.extras.total}`}
+            color="#F59E0B"
+            onClick={() => setActiveSection("extras")}
           />
         </div>
       </div>
+
+      {activeSection === "groups" && (
+        <>
+          {/* Group tabs */}
+          <div className="border-b border-zinc-800/80 shrink-0">
+            <div className="flex overflow-x-auto scrollbar-none px-3 gap-1">
+              {GROUPS.map((g) => {
+                const done = groupComplete(g);
+                const active = g === activeGroup;
+                return (
+                  <button
+                    key={g}
+                    onClick={() => setActiveGroup(g)}
+                    className={cn(
+                      "relative shrink-0 px-3.5 py-3 text-[13px] font-medium transition-colors",
+                      active ? "text-zinc-50" : "text-zinc-500"
+                    )}
+                  >
+                    Grupo {g}
+                    {done && (
+                      <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full ml-1.5 align-middle bg-primary">
+                        <Check className="w-2.5 h-2.5 text-zinc-950" />
+                      </span>
+                    )}
+                    {active && (
+                      <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-zinc-50" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Match list */}
+          <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-3 pb-52 min-h-0">
+            <div className="flex items-center justify-between mb-2.5 px-1">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
+                {groupMatches.length} partidos · Grupo {activeGroup}
+              </div>
+              <div className="text-[11px] text-zinc-500 tabular-nums">
+                {groupFilled}/{groupMatches.length}
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {groupMatches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  matchId={match.id}
+                  matchday={getMatchday(match.match_number)}
+                  homeTeam={match.home_team_data}
+                  awayTeam={match.away_team_data}
+                  kickoff={match.kickoff}
+                  homeScore={scores[match.id]?.home ?? null}
+                  awayScore={scores[match.id]?.away ?? null}
+                  disabled={disabled}
+                  onScoreChange={handleScoreChange}
+                  isSpainMatch={isSpainMatch(match)}
+                  firstScorer={firstScorers[match.id] ?? ""}
+                  onFirstScorerChange={handleFirstScorerChange}
+                  complete={isMatchComplete(match)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Fixed bottom section: button + standings, above BottomNav */}
+          <div className="fixed bottom-16 inset-x-0 z-40">
+            <div className="px-4 pb-2">
+              {activeGroup === "L" ? (
+                <button
+                  onClick={goToBracket}
+                  className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                >
+                  Continuar al bracket →
+                </button>
+              ) : (
+                <button
+                  onClick={goNextGroup}
+                  className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                >
+                  Siguiente grupo →
+                </button>
+              )}
+            </div>
+            <div className="border-t border-zinc-800/80 bg-zinc-900/70 backdrop-blur px-4 py-2">
+              <StandingsStrip
+                groupId={activeGroup}
+                rows={standings.rows}
+                counted={standings.counted}
+                total={standings.total}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {activeSection === "bracket" && (
+        <SectionPlaceholder
+          section="bracket"
+          groupsComplete={allGroupsComplete}
+          completedCount={completedCount}
+          totalMatches={totalMatches}
+          onGoToGroups={() => setActiveSection("groups")}
+        />
+      )}
+      {activeSection === "extras" && (
+        <SectionPlaceholder
+          section="extras"
+          groupsComplete={allGroupsComplete}
+          completedCount={completedCount}
+          totalMatches={totalMatches}
+          onGoToGroups={() => setActiveSection("groups")}
+        />
+      )}
+    </div>
+  );
+}
+
+function hexAlpha(hex: string, a: number) {
+  return hex + Math.round(a * 255).toString(16).padStart(2, "0");
+}
+
+function MobileSectionPill({
+  active,
+  icon,
+  label,
+  count,
+  color,
+  locked,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  count: string;
+  color: string;
+  locked?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative flex items-center gap-1.5 px-2.5 py-2 rounded-lg transition-colors border text-left"
+      style={
+        active
+          ? { background: hexAlpha(color, 0.12), borderColor: color }
+          : { background: "rgb(24 24 27 / 0.6)", borderColor: "rgba(39, 39, 42, 0.8)" }
+      }
+    >
+      <span style={{ color: active ? color : "rgb(113 113 122)" }}>{icon}</span>
+      <div className="flex flex-col leading-tight min-w-0">
+        <span
+          className="text-[11.5px] font-semibold truncate"
+          style={{ color: active ? color : "rgb(228 228 231)" }}
+        >
+          {label}
+        </span>
+        <span
+          className="text-[9.5px] tabular-nums"
+          style={{ color: active ? hexAlpha(color, 0.75) : "rgb(113 113 122)", fontFamily: "var(--font-mono), ui-monospace, monospace" }}
+        >
+          {count}
+        </span>
+      </div>
+      {locked && !active && (
+        <Lock className="absolute top-1 right-1 w-2.5 h-2.5 text-zinc-600" />
+      )}
+    </button>
+  );
+}
+
+function SectionPlaceholder({
+  section,
+  groupsComplete,
+  completedCount,
+  totalMatches,
+  onGoToGroups,
+}: {
+  section: "bracket" | "extras";
+  groupsComplete: boolean;
+  completedCount: number;
+  totalMatches: number;
+  onGoToGroups: () => void;
+}) {
+  const config = {
+    bracket: {
+      icon: <GitBranch className="w-8 h-8 text-zinc-600" />,
+      title: "Eliminatorias",
+      lockedDescription: `Completa los ${totalMatches} partidos de la fase de grupos para desbloquear el bracket. Los clasificados de cada grupo se calcularán automáticamente a partir de tus marcadores.`,
+      readyDescription: "Predice los cruces desde dieciseisavos de final hasta la gran final.",
+    },
+    extras: {
+      icon: <Star className="w-8 h-8 text-zinc-600" />,
+      title: "Extras",
+      lockedDescription: "Máximo goleador, mejor jugador, y más predicciones bonus.",
+      readyDescription: "Máximo goleador, mejor jugador, y más predicciones bonus.",
+    },
+  };
+
+  const { icon, title, lockedDescription, readyDescription } = config[section];
+  const locked = section === "bracket" && !groupsComplete;
+  const description = locked ? lockedDescription : readyDescription;
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-4 min-h-full">
+      <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800/80 flex items-center justify-center">
+        {icon}
+      </div>
+      <div>
+        <h2 className="text-[17px] font-semibold text-zinc-50 mb-1">{title}</h2>
+        <p className="text-[13px] text-zinc-500 leading-relaxed max-w-[280px]">{description}</p>
+      </div>
+      {locked && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+            <Lock className="w-3 h-3" />
+            <span className="tabular-nums">{completedCount}/{totalMatches} partidos completados</span>
+          </div>
+          <button
+            onClick={onGoToGroups}
+            className="mt-1 h-9 px-4 rounded-lg text-[13px] font-medium text-white bg-primary hover:bg-primary/90 transition-colors"
+          >
+            Completar fase de grupos
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -343,35 +584,51 @@ function MobileLayout({
 // ─── Desktop Layout ──────────────────────────────────────────
 
 function DesktopLayout({
+  activeSection,
+  setActiveSection,
+  sectionCounts,
+  allGroupsComplete,
   activeGroup,
   setActiveGroup,
   groupMatches,
   matches,
   scores,
+  firstScorers,
   completedCount,
   totalMatches,
   groupFilled,
   groupComplete,
   groupFilledCount,
+  isMatchComplete,
   standings,
   disabled,
   handleScoreChange,
+  handleFirstScorerChange,
   goNextGroup,
+  goToBracket,
 }: {
+  activeSection: Section;
+  setActiveSection: (s: Section) => void;
+  sectionCounts: SectionCounts;
+  allGroupsComplete: boolean;
   activeGroup: string;
   setActiveGroup: (g: string) => void;
   groupMatches: Match[];
   matches: Match[];
   scores: Record<string, { home: number | null; away: number | null }>;
+  firstScorers: Record<string, string>;
   completedCount: number;
   totalMatches: number;
   groupFilled: number;
   groupComplete: (g: string) => boolean;
   groupFilledCount: (g: string) => number;
+  isMatchComplete: (m: Match) => boolean;
   standings: ReturnType<typeof computeStandings>;
   disabled: boolean;
   handleScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  handleFirstScorerChange: (matchId: string, playerName: string) => void;
   goNextGroup: () => void;
+  goToBracket: () => void;
 }) {
   const activeGroupTeams = useMemo(() => {
     const teamMap: Record<string, Team> = {};
@@ -393,15 +650,53 @@ function DesktopLayout({
 
   return (
     <div className="flex h-full min-h-0">
-      {/* LEFT — group sidebar */}
-      <aside className="w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
+      {/* LEFT — sidebar */}
+      <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
         <div className="p-5 border-b border-zinc-800/80">
           <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-1">
-            Pronósticos
+            Pronósticos · Mundial 2026
           </div>
-          <h2 className="text-[17px] font-semibold text-zinc-50">Fase de grupos</h2>
         </div>
+
+        {/* Section nav */}
+        <div className="p-3 border-b border-zinc-800/80 flex flex-col gap-1">
+          <DesktopSectionItem
+            active={activeSection === "groups"}
+            icon={<LayoutGrid className="w-4 h-4" />}
+            label="Grupos"
+            filled={sectionCounts.groups.filled}
+            total={sectionCounts.groups.total}
+            color="#1B9E5B"
+            onClick={() => setActiveSection("groups")}
+          />
+          <DesktopSectionItem
+            active={activeSection === "bracket"}
+            icon={<GitBranch className="w-4 h-4" />}
+            label="Bracket"
+            filled={sectionCounts.bracket.filled}
+            total={sectionCounts.bracket.total}
+            color="#A855F7"
+            locked
+            onClick={() => setActiveSection("bracket")}
+          />
+          <DesktopSectionItem
+            active={activeSection === "extras"}
+            icon={<Star className="w-4 h-4" />}
+            label="Extras"
+            filled={sectionCounts.extras.filled}
+            total={sectionCounts.extras.total}
+            color="#F59E0B"
+            onClick={() => setActiveSection("extras")}
+          />
+        </div>
+
+        {/* Group list (only when groups section active) */}
+        {activeSection === "groups" && (
         <div className="p-3 flex-1 overflow-y-auto scrollbar-thin">
+          <div className="flex items-center justify-between px-3 mb-2">
+            <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium">Grupos</div>
+            <div className="text-[10.5px] text-zinc-500 tabular-nums">{completedCount}/{totalMatches}</div>
+          </div>
           {GROUPS.map((g) => {
             const filled = groupFilledCount(g);
             const active = g === activeGroup;
@@ -456,11 +751,13 @@ function DesktopLayout({
             );
           })}
         </div>
+        )}
       </aside>
 
-      {/* CENTER — selected group */}
+      {/* CENTER */}
       <main className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="px-10 py-7 max-w-[920px]">
+        {activeSection === "groups" && (
+        <div className="px-6 xl:px-10 py-7 max-w-[920px]">
           {/* Group header */}
           <div className="flex items-baseline justify-between mb-1">
             <div className="flex items-baseline gap-3">
@@ -478,7 +775,7 @@ function DesktopLayout({
           </div>
 
           {/* Teams strip */}
-          <div className="grid grid-cols-4 gap-2 mt-4 mb-6">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mt-4 mb-6">
             {activeGroupTeams.map((t) => (
               <div
                 key={t.code}
@@ -511,10 +808,10 @@ function DesktopLayout({
                   </div>
                   <div className="text-[11px] text-zinc-600">{dateStr}</div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {dayMatches.map((match) => {
                     const s = scores[match.id];
-                    const complete = s && s.home !== null && s.away !== null;
+                    const complete = isMatchComplete(match);
                     const date = new Date(match.kickoff);
                     const day = date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
                     const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
@@ -530,6 +827,9 @@ function DesktopLayout({
                         time={time}
                         disabled={disabled}
                         onScoreChange={handleScoreChange}
+                        isSpainMatch={isSpainMatch(match)}
+                        firstScorer={firstScorers[match.id] ?? ""}
+                        onFirstScorerChange={handleFirstScorerChange}
                       />
                     );
                   })}
@@ -538,7 +838,14 @@ function DesktopLayout({
             );
           })}
 
-          {activeGroup !== "L" && (
+          {activeGroup === "L" ? (
+            <button
+              onClick={goToBracket}
+              className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+            >
+              Continuar al bracket →
+            </button>
+          ) : (
             <button
               onClick={goNextGroup}
               className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
@@ -547,11 +854,22 @@ function DesktopLayout({
             </button>
           )}
         </div>
+        )}
+
+        {activeSection !== "groups" && (
+          <SectionPlaceholder
+            section={activeSection as "bracket" | "extras"}
+            groupsComplete={allGroupsComplete}
+            completedCount={completedCount}
+            totalMatches={totalMatches}
+            onGoToGroups={() => setActiveSection("groups")}
+          />
+        )}
       </main>
 
-      {/* RIGHT — standings & progress */}
-      <aside className="w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-5 overflow-y-auto scrollbar-thin">
-        {/* Standings preview */}
+      {/* RIGHT — standings & progress (only for groups) */}
+      {activeSection === "groups" && (
+      <aside className="w-[240px] xl:w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
         <DesktopStandingsCard
           groupId={activeGroup}
           standings={standings}
@@ -585,10 +903,7 @@ function DesktopLayout({
           <div className="grid grid-cols-6 gap-1 mt-3.5">
             {GROUPS.map((g) => {
               const gm = matches.filter((m) => m.group_letter === g);
-              const f = gm.filter((m) => {
-                const s = scores[m.id];
-                return s && s.home !== null && s.away !== null;
-              }).length;
+              const f = gm.filter(isMatchComplete).length;
               const pct = f / 6;
               return (
                 <div key={g} className="flex flex-col items-center gap-1">
@@ -633,11 +948,65 @@ function DesktopLayout({
           Tus pronósticos son <span className="text-zinc-300">anónimos</span> hasta el 11 jun.
         </p>
       </aside>
+      )}
     </div>
   );
 }
 
 // ─── Desktop sub-components ──────────────────────────────────
+
+function DesktopSectionItem({
+  active,
+  icon,
+  label,
+  filled,
+  total,
+  color,
+  locked,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  filled: number;
+  total: number;
+  color: string;
+  locked?: boolean;
+  onClick: () => void;
+}) {
+  const pct = total > 0 ? Math.round((filled / total) * 100) : 0;
+
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
+      style={
+        active
+          ? { background: hexAlpha(color, 0.10), border: `1px solid ${hexAlpha(color, 0.33)}` }
+          : { border: "1px solid transparent" }
+      }
+    >
+      <div
+        className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+        style={{ background: active ? hexAlpha(color, 0.16) : "rgb(39 39 42 / 0.6)" }}
+      >
+        <span style={{ color: active ? color : "rgb(161 161 170)" }}>{icon}</span>
+      </div>
+      <span className={cn("text-[13px] font-medium leading-tight flex-1", active ? "text-zinc-50" : "text-zinc-300")}>
+        {label}
+      </span>
+      {locked && <Lock className="w-2.5 h-2.5 text-zinc-600" />}
+      <div
+        className="text-[10.5px] tabular-nums flex items-center gap-1.5 shrink-0"
+        style={{ color: active ? color : "rgb(113 113 122)", fontFamily: "var(--font-mono), ui-monospace, monospace" }}
+      >
+        <span>{filled}/{total}</span>
+        <span className="text-zinc-700">·</span>
+        <span>{pct}%</span>
+      </div>
+    </button>
+  );
+}
 
 function DesktopMatchCard({
   match,
@@ -648,6 +1017,9 @@ function DesktopMatchCard({
   time,
   disabled,
   onScoreChange,
+  isSpainMatch: spainMatch,
+  firstScorer,
+  onFirstScorerChange,
 }: {
   match: Match;
   homeScore: number | null;
@@ -657,6 +1029,9 @@ function DesktopMatchCard({
   time: string;
   disabled: boolean;
   onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  isSpainMatch?: boolean;
+  firstScorer?: string;
+  onFirstScorerChange?: (matchId: string, playerName: string) => void;
 }) {
   const handleHome = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -686,14 +1061,14 @@ function DesktopMatchCard({
       <div className="flex items-center justify-between mb-3 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500">
         <div>{day} · {time}</div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2.5 flex-1">
-          <TeamFlag code={match.home_team_data.code} size={36} className="shrink-0" />
-          <div className="text-[15px] text-zinc-100 font-medium">
+      <div className="flex items-center gap-2 xl:gap-3">
+        <div className="flex items-center gap-2 xl:gap-2.5 flex-1 min-w-0">
+          <TeamFlag code={match.home_team_data.code} size={32} className="shrink-0 xl:w-9 xl:h-9" />
+          <div className="text-[13px] xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.home_team_data.name}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 xl:gap-2 shrink-0">
           <input
             type="tel"
             inputMode="numeric"
@@ -702,7 +1077,7 @@ function DesktopMatchCard({
             placeholder="–"
             onChange={handleHome}
             disabled={disabled}
-            className="w-[52px] h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-[44px] h-[44px] xl:w-[52px] xl:h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
           />
           <span className="text-zinc-700">:</span>
@@ -714,17 +1089,46 @@ function DesktopMatchCard({
             placeholder="–"
             onChange={handleAway}
             disabled={disabled}
-            className="w-[52px] h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-[44px] h-[44px] xl:w-[52px] xl:h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
           />
         </div>
-        <div className="flex items-center gap-2.5 flex-1 justify-end text-right">
-          <div className="text-[15px] text-zinc-100 font-medium">
+        <div className="flex items-center gap-2 xl:gap-2.5 flex-1 min-w-0 justify-end text-right">
+          <div className="text-[13px] xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.away_team_data.name}
           </div>
-          <TeamFlag code={match.away_team_data.code} size={36} className="shrink-0" />
+          <TeamFlag code={match.away_team_data.code} size={32} className="shrink-0 xl:w-9 xl:h-9" />
         </div>
       </div>
+
+      {spainMatch && onFirstScorerChange && (
+        <div className="mt-3 pt-3 border-t border-zinc-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-400">
+              <span>⚽</span>
+              <span className="uppercase tracking-[0.1em]">Primer gol · Bonus España</span>
+            </div>
+            <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+              +10 PTS
+            </span>
+          </div>
+          <input
+            type="text"
+            value={firstScorer ?? ""}
+            placeholder="Jugador..."
+            onChange={(e) => onFirstScorerChange(match.id, e.target.value)}
+            disabled={disabled}
+            className={cn(
+              "w-full h-11 rounded-lg bg-zinc-950 border text-[13px] text-zinc-100 px-3",
+              "placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/25",
+              "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
+              firstScorer
+                ? "border-primary/60"
+                : "border-zinc-800"
+            )}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -782,27 +1186,29 @@ function DesktopStandingsCard({
               {rows.map((r, i) => {
                 const passes = i < 2;
                 return (
-                  <tr key={r.code} className="border-t border-zinc-800/60">
-                    <td className="pl-3 py-1.5">
-                      <span
-                        className={cn(
-                          "inline-block w-1 h-3 rounded-full mr-1 align-middle",
-                          passes
-                            ? provisional
-                              ? "bg-primary opacity-40"
-                              : "bg-primary"
-                            : "opacity-0"
-                        )}
-                      />
-                      <span className="text-zinc-500 tabular-nums">{i + 1}</span>
+                  <tr key={r.code} className="border-t border-zinc-800/60 align-middle">
+                    <td className="pl-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <span
+                          className={cn(
+                            "w-1 h-3 rounded-full shrink-0",
+                            passes
+                              ? provisional
+                                ? "bg-primary opacity-40"
+                                : "bg-primary"
+                              : "opacity-0"
+                          )}
+                        />
+                        <span className="text-zinc-500 tabular-nums">{i + 1}</span>
+                      </div>
                     </td>
-                    <td className="py-1.5 text-zinc-100">
-                      <span className="inline-flex items-center gap-1.5">
-                        <TeamFlag code={r.code} size={16} />
-                        <span className={cn("text-[11.5px]", r.pj > 0 ? "" : "text-zinc-500")}>
+                    <td className="py-2 pl-2 text-zinc-100">
+                      <div className="flex items-center gap-1.5">
+                        <TeamFlag code={r.code} size={16} className="shrink-0" />
+                        <span className={cn("text-[11.5px] truncate", r.pj > 0 ? "" : "text-zinc-500")}>
                           {r.name}
                         </span>
-                      </span>
+                      </div>
                     </td>
                     <td className="text-right text-zinc-400 tabular-nums px-1.5">{r.pj}</td>
                     <td className="text-right text-zinc-400 tabular-nums px-1.5">

@@ -4,6 +4,7 @@ import {
   scoreGroupQualifiers,
   scoreKnockout,
   scoreExtra,
+  scoreFirstScorer,
   calculateTotal,
   type ScoringRules,
   type MatchPrediction,
@@ -25,6 +26,14 @@ const DEFAULT_RULES: ScoringRules = {
   champion: 40,
   top_scorer: 15,
   best_player: 10,
+  top_assister: 15,
+  most_goals_team: 10,
+  most_conceded_team: 10,
+  runner_up: 20,
+  third_place: 15,
+  spain_elim_round: 15,
+  spain_elim_rival: 10,
+  first_scorer_esp: 10,
 };
 
 describe("scoreGroupMatch", () => {
@@ -165,6 +174,64 @@ describe("scoreExtra", () => {
     const pred: ExtraPrediction = { kind: "TOP_SCORER", value: "Mbappé" };
     expect(scoreExtra(pred, "Kane", DEFAULT_RULES)).toBe(0);
   });
+
+  it("scores top_assister correctly", () => {
+    const pred: ExtraPrediction = { kind: "TOP_ASSISTER", value: "Lamine Yamal" };
+    expect(scoreExtra(pred, "Lamine Yamal", DEFAULT_RULES)).toBe(15);
+  });
+
+  it("scores runner_up correctly", () => {
+    const pred: ExtraPrediction = { kind: "RUNNER_UP", value: "Inglaterra" };
+    expect(scoreExtra(pred, "Inglaterra", DEFAULT_RULES)).toBe(20);
+  });
+
+  it("scores third_place correctly", () => {
+    const pred: ExtraPrediction = { kind: "THIRD_PLACE", value: "Francia" };
+    expect(scoreExtra(pred, "Francia", DEFAULT_RULES)).toBe(15);
+  });
+
+  it("scores most_goals_team correctly", () => {
+    const pred: ExtraPrediction = { kind: "MOST_GOALS_TEAM", value: "España" };
+    expect(scoreExtra(pred, "España", DEFAULT_RULES)).toBe(10);
+  });
+
+  it("scores most_conceded_team correctly", () => {
+    const pred: ExtraPrediction = { kind: "MOST_CONCEDED_TEAM", value: "Arabia Saudí" };
+    expect(scoreExtra(pred, "Arabia Saudí", DEFAULT_RULES)).toBe(10);
+  });
+
+  it("scores spain_elim_round correctly", () => {
+    const pred: ExtraPrediction = { kind: "SPAIN_ELIM_ROUND", value: "CHAMPION" };
+    expect(scoreExtra(pred, "CHAMPION", DEFAULT_RULES)).toBe(15);
+  });
+
+  it("scores spain_elim_rival correctly", () => {
+    const pred: ExtraPrediction = { kind: "SPAIN_ELIM_RIVAL", value: "Francia" };
+    expect(scoreExtra(pred, "Francia", DEFAULT_RULES)).toBe(10);
+  });
+
+  it("returns 0 for wrong team prediction", () => {
+    const pred: ExtraPrediction = { kind: "MOST_GOALS_TEAM", value: "España" };
+    expect(scoreExtra(pred, "Francia", DEFAULT_RULES)).toBe(0);
+  });
+});
+
+describe("scoreFirstScorer", () => {
+  it("returns true for exact match", () => {
+    expect(scoreFirstScorer("Morata", "Morata")).toBe(true);
+  });
+
+  it("matches case-insensitive", () => {
+    expect(scoreFirstScorer("morata", "Morata")).toBe(true);
+  });
+
+  it("trims whitespace", () => {
+    expect(scoreFirstScorer("  Morata ", "Morata")).toBe(true);
+  });
+
+  it("returns false for wrong player", () => {
+    expect(scoreFirstScorer("Morata", "Lamine Yamal")).toBe(false);
+  });
 });
 
 describe("calculateTotal", () => {
@@ -182,13 +249,15 @@ describe("calculateTotal", () => {
       ],
       knockout: [4, 8, 0],
       extras: [15, 0],
+      firstScorerEsp: [10, 0, 10],
     });
 
     expect(result.group_matches).toBe(7);
     expect(result.group_qualifiers).toBe(8);
     expect(result.knockout).toBe(12);
     expect(result.extras).toBe(15);
-    expect(result.total).toBe(42);
+    expect(result.first_scorer_esp).toBe(20);
+    expect(result.total).toBe(62);
     expect(result.exact_hits).toBe(2);
   });
 
@@ -198,6 +267,7 @@ describe("calculateTotal", () => {
       groupQualifiers: [],
       knockout: [],
       extras: [],
+      firstScorerEsp: [],
     });
     expect(result.total).toBe(0);
     expect(result.exact_hits).toBe(0);

@@ -42,7 +42,10 @@ DOCS/                  → Specs, ADRs, design system, prototipos
 - Tests scoring: Vitest, TDD estricto. Tests E2E anonimato: Playwright
 
 ## SESION — Protocolo
+- Leer SESSION_LOG.md PRIMERO para estado actual del proyecto
 - Leer DOCS/SPEC.md para contexto de producto
 - Leer DOCS/ARCHITECTURE.md para decisiones técnicas
 - Leer DOCS/design.md antes de crear cualquier componente UI
 - Consultar DOCS/COMPONENT_SYSTEM.md antes de crear componentes nuevos
+- Consultar DOCS/design/screens-mobile.jsx y screens-desktop.jsx para ver si la pantalla ya tiene diseño
+- Actualizar SESSION_LOG.md al final de cada sesión con cambios realizados

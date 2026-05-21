@@ -52,15 +52,25 @@ El MVP cubre **5 categorías** alineadas con la porra histórica del grupo:
 
 | Categoría | Qué se predice | Cuándo se evalúa | Editable hasta |
 |---|---|---|---|
-| **`group_match_result`** | Marcador exacto de cada partido de grupos | Tras finalizar el partido | Inicio del partido específico (regla simple en MVP: 11/jun 18:00 corta todo) |
+| **`group_match_result`** | Marcador exacto de cada partido de grupos | Tras finalizar el partido | 11/jun 18:00 |
 | **`group_qualifiers`** | Los 2 equipos que pasan de cada grupo (1º y 2º) | Tras finalizar la fase de grupos | 11/jun 18:00 |
 | **`knockout_qualifiers`** | Quién pasa cada eliminatoria (16avos → final) | Tras cada ronda | 11/jun 18:00 |
-| **`top_scorer`** | Máximo goleador del torneo | Final del torneo | 11/jun 18:00 |
-| **`best_player`** | Mejor jugador del torneo | Final del torneo | 11/jun 18:00 |
+| **`top_scorer`** | Máximo goleador del torneo (Bota de Oro) | Final del torneo | 11/jun 18:00 |
+| **`best_player`** | Mejor jugador del torneo (Balón de Oro FIFA) | Final del torneo | 11/jun 18:00 |
+| **`top_assister`** | Máximo asistente del torneo | Final del torneo | 11/jun 18:00 |
+| **`runner_up`** | Subcampeón (finalista perdedor) | Tras la final | 11/jun 18:00 |
+| **`third_place`** | Tercer puesto (ganador partido 3er/4º puesto) | Tras partido de 3er puesto | 11/jun 18:00 |
+| **`most_goals_team`** | Equipo que más goles marca en todo el torneo | Final del torneo | 11/jun 18:00 |
+| **`most_conceded_team`** | Equipo que más goles recibe en todo el torneo | Final del torneo | 11/jun 18:00 |
+| **`spain_elim_round`** | En qué ronda se elimina España (o "CHAMPION") | Cuando España sea eliminada o gane | 11/jun 18:00 |
+| **`spain_elim_rival`** | Contra quién pierde España (o "-" si campeona) | Cuando España sea eliminada o gane | 11/jun 18:00 |
+| **`first_scorer_esp`** | Primer goleador de cada partido de España | Tras cada partido de España | 11/jun 18:00 |
 
 > **Decisión de scope MVP:** Marcadores de eliminatorias = fuera. Solo se predice "quién pasa". Si sobra tiempo en Fase 4, se añade.
 
 > **Decisión sobre deadline:** En MVP, deadline único = **11 de junio de 2026 18:00 hora peninsular española** (inicio del partido inaugural). Tras ese momento, ningún pronóstico se puede editar y todos se revelan. Simplifica vs. deadline por partido y se ajusta al espíritu de "antes del Mundial".
+
+> **Fuente de datos bonus:** `top_scorer`, `top_assister`, `most_goals_team`, `most_conceded_team` se obtienen automáticamente de API-Football. `first_scorer_esp` se obtiene del endpoint `/fixtures/{id}/events`. `best_player` es el premio FIFA Golden Ball, se mete manual. `runner_up` y `third_place` se deducen del bracket. `spain_elim_round` y `spain_elim_rival` se deducen de los resultados de eliminatorias.
 
 ---
 
@@ -83,10 +93,18 @@ Esta es una propuesta de partida; ajustadla entre todos antes del deadline:
 | Pasa de cuartos | Acierta equipo en semis | 8 |
 | Pasa de semis | Acierta finalista | 16 |
 | Campeón | Acierta ganador del Mundial | 40 |
-| Máximo goleador | Acierta exacto | 15 |
-| Mejor jugador | Acierta exacto | 10 |
+| Subcampeón | Acierta finalista perdedor | 20 |
+| Tercer puesto | Acierta ganador del 3er/4º puesto | 15 |
+| Máximo goleador (Bota de Oro) | Acierta exacto | 15 |
+| Mejor jugador (Balón de Oro) | Acierta exacto | 10 |
+| Máximo asistente | Acierta exacto | 15 |
+| Equipo más goleador | Equipo con más goles en el torneo | 10 |
+| Equipo más goleado | Equipo con más goles encajados | 10 |
+| Ronda eliminación España | Acierta en qué ronda cae (o CHAMPION) | 15 |
+| Rival eliminación España | Acierta contra quién pierde España | 10 |
+| Primer goleador España (por partido) | Acierta el 1er goleador de cada partido de ESP | 10 |
 
-**Total máximo teórico aproximado:** ~600 pts. Ratio campeón/total ≈ 7%, alto pero no absurdo.
+**Total máximo teórico aproximado:** ~800 pts. Los bonus individuales/equipo suman ~120 pts extra, los de primer goleador de España ~70 pts (7 partidos si llega a la final).
 
 ### 4.3 Reglas de desempate (tiebreakers, en orden)
 1. Más marcadores exactos acertados.
@@ -98,19 +116,27 @@ Esta es una propuesta de partida; ajustadla entre todos antes del deadline:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "frozen_at": null,
   "rules": {
     "group_match_sign": 1,
     "group_match_exact": 3,
     "group_qualifier_any": 2,
     "group_qualifier_first": 3,
-    "knockout_r16_to_qf": 4,
-    "knockout_qf_to_sf": 8,
-    "knockout_sf_to_final": 16,
+    "knockout_r16": 4,
+    "knockout_qf": 8,
+    "knockout_sf": 16,
     "champion": 40,
+    "runner_up": 20,
+    "third_place": 15,
     "top_scorer": 15,
-    "best_player": 10
+    "best_player": 10,
+    "top_assister": 15,
+    "most_goals_team": 10,
+    "most_conceded_team": 10,
+    "spain_elim_round": 15,
+    "spain_elim_rival": 10,
+    "first_scorer_esp": 10
   }
 }
 ```
@@ -304,15 +330,25 @@ predictions_knockout (
 predictions_extra (
   user_id uuid,
   pool_id uuid,
-  kind text,          -- TOP_SCORER|BEST_PLAYER
-  value text,         -- nombre del jugador (MVP: texto libre)
+  kind text,          -- TOP_SCORER|BEST_PLAYER|TOP_ASSISTER|MOST_GOALS_TEAM|
+                      -- MOST_CONCEDED_TEAM|RUNNER_UP|THIRD_PLACE|
+                      -- SPAIN_ELIM_ROUND|SPAIN_ELIM_RIVAL
+  value text,         -- nombre del jugador/equipo/ronda (texto libre)
   PRIMARY KEY (user_id, pool_id, kind)
+);
+
+predictions_first_scorer (
+  user_id uuid,
+  pool_id uuid,
+  match_id uuid REFERENCES matches, -- solo partidos de España
+  player_name text NOT NULL,
+  PRIMARY KEY (user_id, pool_id, match_id)
 );
 
 scores (  -- materialized; recalculado tras cada resultado
   user_id uuid,
   pool_id uuid,
-  category text,      -- GROUP_MATCHES|GROUP_QUALIFIERS|KNOCKOUT|EXTRAS|TOTAL
+  category text,      -- GROUP_MATCHES|GROUP_QUALIFIERS|KNOCKOUT|EXTRAS|FIRST_SCORER_ESP|TOTAL
   points int,
   PRIMARY KEY (user_id, pool_id, category)
 );
