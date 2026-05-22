@@ -1,44 +1,30 @@
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { PredictionsClient } from "./predictions-client";
 
-export default async function PredictionsPage() {
+export default async function PredictionsPage({
+  params,
+}: {
+  params: Promise<{ poolId: string }>;
+}) {
+  const { poolId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  // Get user's pool
-  const { data: participation, error: partError } = await supabase
-    .from("participations")
-    .select("pool_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .single();
-
-  if (!participation || partError) {
-    return (
-      <div className="flex items-center justify-center h-[60vh] px-4">
-        <p className="text-muted-foreground text-center">
-          No estás en ninguna porra todavía.
-        </p>
-      </div>
-    );
-  }
-
-  const poolId = participation.pool_id;
+  if (!user) notFound();
 
   const { data: pool } = await supabase
     .from("pools")
-    .select("id, status")
+    .select("id, status, tournament_id")
     .eq("id", poolId)
-    .single();
+    .maybeSingle();
 
-  const disabled = pool?.status !== "OPEN";
+  if (!pool) notFound();
 
-  // Get matches with team data
+  const disabled = pool.status !== "OPEN";
+
   const { data: matches } = await supabase
     .from("matches")
     .select(`
@@ -46,18 +32,16 @@ export default async function PredictionsPage() {
       home:teams!matches_home_team_fkey(id, name, code, flag_emoji),
       away:teams!matches_away_team_fkey(id, name, code, flag_emoji)
     `)
-    .eq("pool_id", poolId)
+    .eq("tournament_id", pool.tournament_id)
     .eq("stage", "GROUP")
     .order("match_number");
 
-  // Get user predictions
   const { data: predictions } = await supabase
     .from("predictions_match")
     .select("match_id, home_score, away_score")
     .eq("user_id", user.id)
     .eq("pool_id", poolId);
 
-  // Get first scorer predictions
   const { data: firstScorerPreds } = await supabase
     .from("predictions_first_scorer")
     .select("match_id, player_name")

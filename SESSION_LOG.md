@@ -16,7 +16,7 @@
 | Área | Estado | Notas |
 |---|---|---|
 | Supabase project | Activo | `funcrmqctwjoiovtccbh`, región eu-west-1, Postgres 17 |
-| DB Schema | 5 migraciones aplicadas | 11 tablas con RLS, trigger freeze scoring |
+| DB Schema | 7 migraciones aplicadas | tournaments + pools (multi-porra), 12 tablas, RLS + trigger join |
 | Data seeding | Completo | 48 equipos, 72 partidos de grupos, 1 pool, 1 participación |
 | Auth (Magic Link) | Funcional | Login form + server action + callback |
 | Scoring engine | Completo + 33 tests | Incluye 8 bonus categories (desde 2026-05-20) |
@@ -61,7 +61,61 @@ Clasificación: `C:\Users\david\Downloads\PORRA WC\screens-clasificacion.jsx` + 
 | LeaderboardClient | `src/app/(main)/leaderboard/leaderboard-client.tsx` | Podio + tabla expandible, mobile + desktop |
 | shadcn/ui | `src/components/ui/` | badge, button, card, input, table, tabs, toggle, toggle-group |
 
-### Cambios de la última sesión (2026-05-21)
+### Cambios de la sesión 2026-05-22 (login contextual + welcome + dev login)
+
+1. **Login contextual con invite**
+   - `src/app/(auth)/login/page.tsx`: si `next=/join/[code]`, llama a la RPC `pool_lookup_by_invite_code` y pasa `invitePool` a `LoginForm`
+   - `src/app/(auth)/login/login-form.tsx`: header extraído a `<Header>`. Renderiza "Te han invitado a `<PoolName>` · N jugadores" si hay `invitePool`; si no, branding por defecto ("Porra Mundial 2026 / Pronósticos entre amigos"). También se usa en el estado "sent" tras enviar magic link.
+
+2. **Pantalla welcome** (`src/app/(main)/welcome/`)
+   - `page.tsx`: hero "Bienvenido a la Porra del Mundial" + 2 cards (Crear porra → `/pools/new` · Tengo un código → input)
+   - `code-form.tsx`: client component con input que hace `router.push('/join/' + code)`
+   - `src/app/page.tsx` dispatcher: 0 porras → `/welcome` (antes era `/pools/new`)
+
+3. **Dev login (sin gastar magic links)** (`src/app/dev/login/route.ts`)
+   - Endpoint que usa `auth.admin.generateLink` (Admin API, no consume rate limit de `/otp` 2/hora)
+   - Requiere `SUPABASE_SERVICE_ROLE_KEY` en `.env.local` (añadido también a `.env.example`)
+   - Bloqueado en producción (`NODE_ENV === "production"` → 404)
+   - Middleware actualizado para permitir `/dev/*` sin sesión
+   - Uso: `/dev/login?email=test@example.com&next=/welcome|/join/<code>|/pools/new`
+   - Permite emular los 3 journeys (welcome, invite link, vuelta de user existente) sin tocar bandeja de entrada
+
+4. **Verificación journeys** (manual con `/dev/login`):
+   - Invite code actual: `808c3e6c` (porra "Mundial 2026")
+   - Journey A nuevo: email nuevo → `/welcome`
+   - Journey B nuevo: email nuevo + `next=/join/<code>` → form display_name → predictions de esa porra
+   - Journey B repetido: email participante + `next=/join/<code>` → redirige directo a predictions
+   - Login contextual visible en `/login?next=/join/808c3e6c` (incógnito)
+
+### Cambios de la sesión 2026-05-21 (multi-porra)
+
+1. **Refactor data model: tournaments + pools** (migraciones 006/007)
+   - Nueva tabla `tournaments`; `teams`/`matches`/`goal_events` ahora referencian `tournament_id` (datos del torneo compartidos)
+   - Pools añade `tournament_id` (FK) y `invite_code` (UNIQUE, autogenerado)
+   - Backfill limpio: WC2026 + 48 equipos + 72 partidos
+   - RLS: lectura pública para authenticated en tournaments/teams/matches/goal_events; pools.INSERT autenticada con `created_by=auth.uid()`; participations.INSERT propio
+   - Función RPC `pool_lookup_by_invite_code(text)` (SECURITY DEFINER) para flujo de join
+   - Trigger `trg_on_pool_created`: al crear pool, auto-crea participation con `is_admin=true` y `display_name=email local-part`
+
+2. **Routing multi-porra**
+   - `/predictions` y `/leaderboard` movidos a `/pools/[poolId]/predictions` y `/pools/[poolId]/leaderboard`
+   - Nuevo `(main)/pools/[poolId]/layout.tsx` con TopBar/BottomNav y validación de participación
+   - `(main)/layout.tsx` solo hace auth check
+   - Root `/` redirige según nº de pools: 0 → /welcome · 1 → predictions · 2+ → /pools
+   - TopBar/BottomNav reciben `poolId` por prop; links se construyen dinámicos
+
+3. **Nuevas pantallas pools**
+   - `/pools` — lista de "Mis porras" con código de invitación visible para admins
+   - `/pools/new` — formulario crear porra (selector de torneo, deadline, nombre); muestra código + enlace tras crear
+   - `/join/[code]` — landing pública: si no logueado redirige a /login con `next=/join/[code]`; flow forwarda `next` por el magic link
+
+4. **Server actions** en `src/app/(main)/pools/actions.ts`
+   - `createPool({ name, tournament_id, deadline })` con validación Zod
+   - `joinPool({ invite_code, display_name })` usa RPC + INSERT participation
+
+5. **Verificación**: 33 tests scoring verdes (sin cambios), `next build` ok, type-check limpio.
+
+### Cambios de sesiones anteriores (2026-05-21)
 
 1. **Migración 005 aplicada**: `bonus_categories.sql` verificada en Supabase remoto (constraints, tabla, indexes ok)
 

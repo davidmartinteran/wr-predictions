@@ -7,17 +7,23 @@ const emailSchema = z.email("Email no válido");
 
 export async function sendMagicLink(formData: FormData) {
   const raw = formData.get("email");
+  const next = formData.get("next");
   const parsed = emailSchema.safeParse(raw);
 
   if (!parsed.success) {
     return { error: "Introduce un email válido" };
   }
 
+  const callbackUrl = new URL(`${getBaseUrl()}/auth/callback`);
+  if (typeof next === "string" && next.startsWith("/")) {
+    callbackUrl.searchParams.set("next", next);
+  }
+
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: {
-      emailRedirectTo: `${getBaseUrl()}/auth/callback`,
+      emailRedirectTo: callbackUrl.toString(),
     },
   });
 

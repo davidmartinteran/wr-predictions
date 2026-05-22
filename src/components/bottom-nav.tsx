@@ -5,20 +5,28 @@ import { usePathname } from "next/navigation";
 import { List, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const tabs = [
-  { href: "/predictions", label: "Pronósticos", icon: List },
-  { href: "/leaderboard", label: "Clasificación", icon: Trophy },
-  { href: "/profile", label: "Mi Porra", icon: User },
-] as const;
+type Props = {
+  poolId: string;
+};
 
-export function BottomNav() {
+export function BottomNav({ poolId }: Props) {
   const pathname = usePathname();
+  const base = `/pools/${poolId}`;
+
+  const tabs = [
+    { href: `${base}/predictions`, label: "Pronósticos", icon: List },
+    { href: `${base}/leaderboard`, label: "Clasificación", icon: Trophy },
+    { href: `/pools`, label: "Mis porras", icon: User },
+  ] as const;
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur-sm lg:hidden">
       <div className="flex h-16 items-center justify-around pb-[env(safe-area-inset-bottom)]">
         {tabs.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active =
+            href === "/pools"
+              ? pathname === "/pools" || pathname.startsWith("/pools/new")
+              : pathname.startsWith(href);
           return (
             <Link
               key={href}

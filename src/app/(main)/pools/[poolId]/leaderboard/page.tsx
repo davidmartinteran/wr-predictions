@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { LeaderboardClient } from "./leaderboard-client";
 
 type ScoreRow = {
@@ -52,42 +52,30 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export default async function LeaderboardPage() {
+export default async function LeaderboardPage({
+  params,
+}: {
+  params: Promise<{ poolId: string }>;
+}) {
+  const { poolId } = await params;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const { data: participation } = await supabase
-    .from("participations")
-    .select("pool_id")
-    .eq("user_id", user.id)
-    .limit(1)
-    .single();
-
-  if (!participation) {
-    return (
-      <div className="flex items-center justify-center h-[60vh] px-4">
-        <p className="text-muted-foreground text-center">
-          No estás en ninguna porra todavía.
-        </p>
-      </div>
-    );
-  }
-
-  const poolId = participation.pool_id;
+  if (!user) notFound();
 
   const [
     { data: pool },
     { data: participants },
     { data: scoreRows },
   ] = await Promise.all([
-    supabase.from("pools").select("name, status").eq("id", poolId).single(),
+    supabase.from("pools").select("name, status").eq("id", poolId).maybeSingle(),
     supabase.from("participations").select("user_id, display_name").eq("pool_id", poolId),
     supabase.from("scores").select("user_id, category, points, exact_hits").eq("pool_id", poolId),
   ]);
+
+  if (!pool) notFound();
 
   const scoresByUser: Record<string, ScoreRow[]> = {};
   for (const row of scoreRows ?? []) {

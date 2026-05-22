@@ -1,12 +1,57 @@
 "use client";
 
 import { useState, useTransition, useEffect, useCallback } from "react";
-import { Trophy, Mail } from "lucide-react";
+import { Trophy, Mail, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendMagicLink } from "./actions";
 
-export function LoginForm() {
+type InvitePool = { name: string; participant_count: number };
+
+type Props = {
+  next?: string;
+  invitePool?: InvitePool | null;
+};
+
+function Header({ invitePool }: { invitePool?: InvitePool | null }) {
+  if (invitePool) {
+    return (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+          <Trophy className="h-7 w-7 text-primary" />
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            Te han invitado a
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            {invitePool.name}
+          </h1>
+          <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
+            {invitePool.participant_count}{" "}
+            {invitePool.participant_count === 1 ? "jugador" : "jugadores"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+        <Trophy className="h-7 w-7 text-primary" />
+      </div>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Porra Mundial 2026</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pronósticos entre amigos
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function LoginForm({ next, invitePool }: Props) {
   const [sent, setSent] = useState(false);
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +84,7 @@ export function LoginForm() {
   const handleResend = useCallback(() => {
     const fd = new FormData();
     fd.set("email", email);
+    if (next) fd.set("next", next);
     setError(null);
     startTransition(async () => {
       const result = await sendMagicLink(fd);
@@ -48,22 +94,12 @@ export function LoginForm() {
         setCountdown(60);
       }
     });
-  }, [email]);
+  }, [email, next]);
 
   if (sent) {
     return (
       <div className="flex flex-col items-center text-center gap-6">
-        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
-          <Trophy className="h-7 w-7 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Porra Mundial 2026
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pronósticos entre amigos
-          </p>
-        </div>
+        <Header invitePool={invitePool} />
 
         <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-800">
           <Mail className="h-7 w-7 text-muted-foreground" />
@@ -134,21 +170,10 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col items-center text-center gap-8">
-      <div className="flex flex-col items-center gap-3">
-        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
-          <Trophy className="h-7 w-7 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Porra Mundial 2026
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pronósticos entre amigos
-          </p>
-        </div>
-      </div>
+      <Header invitePool={invitePool} />
 
       <form action={handleSubmit} className="w-full space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <div className="text-left">
           <label
             htmlFor="email"

@@ -2,37 +2,55 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Trophy, List, User } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const tabs = [
-  { href: "/predictions", label: "Pronósticos", icon: List },
-  { href: "/leaderboard", label: "Clasificación", icon: Trophy },
-  { href: "/profile", label: "Mi Porra", icon: User },
-] as const;
+type Props = {
+  poolId: string;
+  poolName: string;
+  participantCount: number;
+  displayName: string;
+};
 
-export function TopBar() {
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+export function TopBar({ poolId, poolName, participantCount, displayName }: Props) {
   const pathname = usePathname();
+  const base = `/pools/${poolId}`;
+
+  const tabs = [
+    { href: `${base}/predictions`, label: "Pronósticos" },
+    { href: `${base}/leaderboard`, label: "Clasificación" },
+    { href: `/pools`, label: "Mis porras" },
+  ];
 
   return (
     <header className="hidden lg:flex h-14 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur shrink-0 items-center px-6">
-      <div className="flex items-center gap-2.5">
+      <Link href="/pools" className="flex items-center gap-2.5">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary">
           <Trophy className="w-4 h-4 text-zinc-950" />
         </div>
         <div className="leading-tight">
-          <div className="text-[13px] font-semibold text-zinc-50">
-            Porra Mundial 2026
-          </div>
+          <div className="text-[13px] font-semibold text-zinc-50">{poolName}</div>
           <div className="text-[10.5px] text-zinc-500 tabular-nums">
-            Los Amigos · 30 jugadores
+            {participantCount} {participantCount === 1 ? "jugador" : "jugadores"}
           </div>
         </div>
-      </div>
+      </Link>
 
       <nav className="ml-10 flex items-center gap-1">
         {tabs.map(({ href, label }) => {
-          const active = pathname.startsWith(href);
+          const active =
+            href === "/pools"
+              ? pathname === "/pools" || pathname.startsWith("/pools/new")
+              : pathname.startsWith(href);
           return (
             <Link
               key={href}
@@ -51,8 +69,11 @@ export function TopBar() {
       </nav>
 
       <div className="ml-auto flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[11px] font-semibold text-zinc-200">
-          DM
+        <div
+          title={displayName}
+          className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[11px] font-semibold text-zinc-200"
+        >
+          {getInitials(displayName)}
         </div>
       </div>
     </header>

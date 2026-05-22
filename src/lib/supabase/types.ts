@@ -22,8 +22,8 @@ export type Database = {
           match_id: string
           minute: number | null
           player_name: string
-          pool_id: string
           team_id: string
+          tournament_id: string
         }
         Insert: {
           created_at?: string | null
@@ -32,8 +32,8 @@ export type Database = {
           match_id: string
           minute?: number | null
           player_name: string
-          pool_id: string
           team_id: string
+          tournament_id: string
         }
         Update: {
           created_at?: string | null
@@ -42,8 +42,8 @@ export type Database = {
           match_id?: string
           minute?: number | null
           player_name?: string
-          pool_id?: string
           team_id?: string
+          tournament_id?: string
         }
         Relationships: [
           {
@@ -54,17 +54,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "goal_events_pool_id_fkey"
-            columns: ["pool_id"]
-            isOneToOne: false
-            referencedRelation: "pools"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "goal_events_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_events_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
         ]
@@ -82,9 +82,9 @@ export type Database = {
           id: string
           kickoff: string
           match_number: number
-          pool_id: string
           source: string | null
           stage: string
+          tournament_id: string
         }
         Insert: {
           api_fixture_id?: number | null
@@ -98,9 +98,9 @@ export type Database = {
           id?: string
           kickoff: string
           match_number: number
-          pool_id: string
           source?: string | null
           stage: string
+          tournament_id: string
         }
         Update: {
           api_fixture_id?: number | null
@@ -114,9 +114,9 @@ export type Database = {
           id?: string
           kickoff?: string
           match_number?: number
-          pool_id?: string
           source?: string | null
           stage?: string
+          tournament_id?: string
         }
         Relationships: [
           {
@@ -134,10 +134,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "matches_pool_id_fkey"
-            columns: ["pool_id"]
+            foreignKeyName: "matches_tournament_id_fkey"
+            columns: ["tournament_id"]
             isOneToOne: false
-            referencedRelation: "pools"
+            referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
         ]
@@ -180,10 +180,12 @@ export type Database = {
           created_by: string
           deadline: string
           id: string
+          invite_code: string
           name: string
           scoring_frozen_at: string | null
           scoring_rules: Json
           status: string
+          tournament_id: string
           updated_at: string | null
         }
         Insert: {
@@ -191,10 +193,12 @@ export type Database = {
           created_by: string
           deadline: string
           id?: string
+          invite_code?: string
           name: string
           scoring_frozen_at?: string | null
           scoring_rules?: Json
           status?: string
+          tournament_id: string
           updated_at?: string | null
         }
         Update: {
@@ -202,13 +206,23 @@ export type Database = {
           created_by?: string
           deadline?: string
           id?: string
+          invite_code?: string
           name?: string
           scoring_frozen_at?: string | null
           scoring_rules?: Json
           status?: string
+          tournament_id?: string
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pools_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       predictions_extra: {
         Row: {
@@ -474,7 +488,7 @@ export type Database = {
           group_letter: string
           id: string
           name: string
-          pool_id: string
+          tournament_id: string
         }
         Insert: {
           code: string
@@ -482,7 +496,7 @@ export type Database = {
           group_letter: string
           id?: string
           name: string
-          pool_id: string
+          tournament_id: string
         }
         Update: {
           code?: string
@@ -490,23 +504,58 @@ export type Database = {
           group_letter?: string
           id?: string
           name?: string
-          pool_id?: string
+          tournament_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "teams_pool_id_fkey"
-            columns: ["pool_id"]
+            foreignKeyName: "teams_tournament_id_fkey"
+            columns: ["tournament_id"]
             isOneToOne: false
-            referencedRelation: "pools"
+            referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
         ]
+      }
+      tournaments: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          name: string
+          starts_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+          starts_at: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+          starts_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      pool_lookup_by_invite_code: {
+        Args: { p_code: string }
+        Returns: {
+          deadline: string
+          id: string
+          name: string
+          participant_count: number
+          status: string
+          tournament_id: string
+        }[]
+      }
       user_pool_ids: { Args: never; Returns: string[] }
     }
     Enums: {
