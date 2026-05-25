@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
   if (process.env.NODE_ENV === "production") {
@@ -37,26 +38,45 @@ export async function GET(request: Request) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const callback = new URL(`${origin}/auth/callback`);
-  if (next.startsWith("/")) {
-    callback.searchParams.set("next", next);
+  // Create or find user, then generate a session directly
+  let userId: string;
+
+  const { data: existingUsers } = await admin.auth.admin.listUsers();
+  const existing = existingUsers?.users?.find((u) => u.email === email);
+
+  if (existing) {
+    userId = existing.id;
+  } else {
+    const { data: newUser, error: createError } = await admin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+    });
+    if (createError || !newUser.user) {
+      return NextResponse.json({ error: createError?.message ?? "Failed to create user" }, { status: 500 });
+    }
+    userId = newUser.user.id;
   }
 
-  const { data, error } = await admin.auth.admin.generateLink({
+  // Generate a magic link and extract the token to sign in server-side
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email,
-    options: { redirectTo: callback.toString() },
   });
 
-  if (error || !data.properties?.action_link) {
-    return NextResponse.json(
-      {
-        error: error?.message ?? "no action_link returned",
-        code: error?.code,
-      },
-      { status: 500 }
-    );
+  if (linkError || !linkData.properties?.hashed_token) {
+    return NextResponse.json({ error: linkError?.message ?? "No token returned" }, { status: 500 });
   }
 
-  return NextResponse.redirect(data.properties.action_link);
+  // Use the server supabase client to verify the OTP and set the session cookie
+  const supabase = await createClient();
+  const { error: verifyError } = await supabase.auth.verifyOtp({
+    type: "email",
+    token_hash: linkData.properties.hashed_token,
+  });
+
+  if (verifyError) {
+    return NextResponse.json({ error: verifyError.message, hint: "verifyOtp failed" }, { status: 500 });
+  }
+
+  return NextResponse.redirect(`${origin}${next}`);
 }

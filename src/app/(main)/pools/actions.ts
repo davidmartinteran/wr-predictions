@@ -17,8 +17,10 @@ const joinPoolSchema = z.object({
 });
 
 export async function createPool(input: z.infer<typeof createPoolSchema>) {
+  console.log("createPool called with:", input);
   const parsed = createPoolSchema.safeParse(input);
   if (!parsed.success) {
+    console.log("createPool validation failed:", parsed.error.issues);
     return { error: parsed.error.issues[0]?.message ?? "Datos no válidos" };
   }
 
@@ -26,6 +28,7 @@ export async function createPool(input: z.infer<typeof createPoolSchema>) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  console.log("createPool user:", user?.id ?? "NO USER");
   if (!user) return { error: "No autenticado" };
 
   const { data: pool, error } = await supabase
@@ -41,6 +44,7 @@ export async function createPool(input: z.infer<typeof createPoolSchema>) {
     .single();
 
   if (error || !pool) {
+    console.error("createPool error:", error);
     return { error: "No se pudo crear la porra" };
   }
 
@@ -66,6 +70,15 @@ export async function joinPool(input: z.infer<typeof joinPoolSchema>) {
 
   if (lookupErr || !lookup) {
     return { error: "Código de invitación no válido" };
+  }
+
+  const { count } = await supabase
+    .from("participations")
+    .select("user_id", { count: "exact", head: true })
+    .eq("pool_id", lookup.id);
+
+  if ((count ?? 0) >= 30) {
+    return { error: "Esta porra está llena (máximo 30 jugadores)" };
   }
 
   const { error: insertErr } = await supabase

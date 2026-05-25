@@ -20,7 +20,7 @@ export default async function Home() {
   const pools = participations ?? [];
 
   if (pools.length === 0) {
-    redirect("/welcome");
+    redirect("/pools");
   }
 
   if (pools.length === 1) {
