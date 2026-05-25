@@ -204,10 +204,12 @@ Backup manual: el admin puede forzar el revelado desde el panel.
 - Auto-save al cambiar valor (con debounce).
 - Validación: ambos goles entre 0 y 15.
 
-### US-03 — Meter clasificados de grupo
-**Como** participante, **quiero** elegir 1º y 2º de cada grupo **para que** se evalúe al terminar la fase de grupos.
-- Para cada grupo, dos dropdowns (1º y 2º) con los 4 equipos del grupo.
-- Validación: no puede elegir el mismo equipo en 1º y 2º del mismo grupo.
+### US-03 — Clasificados de grupo (derivados)
+**Como** participante, mis clasificados de grupo **se calculan automáticamente** a partir de mis marcadores predichos en US-02.
+- El sistema calcula la tabla de cada grupo usando los marcadores del usuario (puntos, gol diferencia, goles a favor).
+- 1º y 2º de cada grupo se derivan de esa tabla — no hay input separado.
+- Estos clasificados alimentan automáticamente el bracket de eliminatorias (US-04).
+- Nota: la tabla `predictions_group` almacena el resultado derivado para consulta rápida, no input directo del usuario.
 
 ### US-04 — Meter eliminatorias
 **Como** participante, **quiero** rellenar el bracket completo **para que** se evalúe ronda a ronda.
@@ -216,11 +218,11 @@ Backup manual: el admin puede forzar el revelado desde el panel.
 - En cada cruce el usuario elige ganador.
 - Campeón se deduce del último cruce.
 
-### US-05 — Meter goleador y mejor jugador
-**Como** participante, **quiero** elegir un jugador para "máximo goleador" y otro para "mejor jugador" **para que** se evalúe al final.
-- Dos selectores con lista de jugadores convocados.
-- Búsqueda por nombre.
-- *Nota MVP:* lista de jugadores cargada manualmente desde fuente pública (FIFA squad lists). Si retrasa, MVP permite texto libre y se valida manualmente.
+### US-05 — Meter goleador, mejor jugador y asistente
+**Como** participante, **quiero** elegir jugadores para "máximo goleador", "mejor jugador" y "máximo asistente" **para que** se evalúe al final.
+- Tres selectores con autocomplete sobre lista de jugadores convocados.
+- Búsqueda por nombre con datos cargados desde API de fútbol o JSON estático (squad lists).
+- Incluido en la sección "Extras" de predicciones junto con las categorías de equipo y España.
 
 ### US-06 — Editar pronóstico
 **Como** participante, **quiero** modificar mi pronóstico hasta el deadline **para que** pueda ajustar a última hora.
@@ -238,16 +240,20 @@ Backup manual: el admin puede forzar el revelado desde el panel.
 - Mi fila destacada.
 - Actualización en realtime al meter resultados.
 
-### US-09 — Comparar mi porra con la de otro
+### US-09 — Ver porra de otro participante
 **Como** participante, **quiero** ver la porra de otro participante tras el reveal **para que** pueda comentar con ellos.
-- Vista lado a lado de dos porras.
-- Diff marcado visualmente.
+- Tap en un jugador en el leaderboard → abre su porra completa en vista individual.
+- Misma estructura que "Mi Porra" (resumen compacto read-only) pero con datos del otro.
+- Solo disponible cuando el pool está en REVEALED/LIVE/CLOSED (RLS lo garantiza).
+- *Post-launch:* vista lado a lado comparando tu porra con la de otro (diff visual).
 
-### US-10 — Admin: meter resultado oficial
-**Como** admin, **quiero** introducir el marcador real de un partido **para que** se recalculen los puntos.
-- Vista de partidos pendientes, mobile-first.
-- Input rápido de marcador.
-- Trigger automático que recalcula scores afectados.
+### US-10 — Admin: meter resultados
+**Como** admin, **quiero** introducir los resultados reales de los partidos **para que** se recalculen los puntos.
+- MVP: entrada manual por el admin. Vista de partidos pendientes, mobile-first, input rápido de marcador.
+- Nice-to-have (post-MVP): automatizar con APIs de fútbol (polling cada 30 min).
+- También meter ganadores de bonus que no se deducen del bracket: `best_player`, `top_scorer`, `top_assister`, `most_goals_team`, `most_conceded_team`, `first_scorer_esp`.
+- `runner_up`, `third_place` y `champion` se deducen automáticamente de los resultados del bracket — no se meten manualmente.
+- Trigger automático recalcula scores cuando un partido pasa a `finished = true`.
 
 ### US-11 — Admin: configurar scoring
 **Como** admin, **quiero** editar la tabla de puntuación **para que** refleje lo acordado con el grupo.

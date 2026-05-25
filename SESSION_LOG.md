@@ -145,33 +145,53 @@ Clasificación: `C:\Users\david\Downloads\PORRA WC\screens-clasificacion.jsx` + 
 
 ## Pendiente (priorizado)
 
-### Alta prioridad (MVP)
-- [ ] Admin: meter resultados — sin diseño, necesita UI + actions
-- [ ] Bracket eliminatorias — tiene diseño mobile + desktop, no implementado (placeholder listo)
+### Alta prioridad (MVP — antes del 11 jun)
+- [ ] **Extras/Bonus** — UI para 6 categorías de predictions_extra. Campeón, subcampeón y tercer puesto se deducen del bracket, no se eligen aquí. Sin diseño aún.
+- [ ] **Bracket eliminatorias** — implementar diseño existente (screens-mobile/desktop.jsx). Cruces derivados automáticamente de marcadores de grupos del usuario. Propagación de ganadores entre rondas.
+- [ ] **Mi Porra** — tercer tab del bottom nav (reemplaza "Mis porras"). Resumen compacto read-only de todas las predicciones del usuario en el pool actual + link a "/pools" para multi-porra.
+- [ ] **Ver porra de otro** — desde leaderboard, tap en jugador → ver su porra (misma estructura que Mi Porra). Solo post-reveal.
+- [ ] **Estados de pool en UI** — feedback visual para LOCKED (banner + inputs disabled), REVEALED (banner + habilitar ver porras ajenas), LIVE (badge EN VIVO + resultados reales junto a predicciones).
 - [ ] Edge Functions: reveal-pool cron (LOCKED → REVEALED el 11/jun 18:00)
 - [ ] E2E test anonimato (Playwright: pre-reveal no se ven predicciones ajenas)
 
 ### Media prioridad
-- [ ] UI predicciones extras/bonus (9 categorías) — sin diseño
-- [ ] UI primer goleador España (por partido) — sin diseño
-- [ ] Root page `/` — redirigir a /login o /predictions
+- [ ] Admin: meter resultados — UI para introducir marcadores manualmente. Las APIs de fútbol son nice-to-have, no MVP.
+- [ ] APIs de fútbol — investigar post-MVP si da tiempo. Automatizaría la entrada de resultados.
 - [ ] TopBar — datos dinámicos (nombre pool, nº jugadores, user)
 - [ ] Leaderboard: pulir estilos finales, verificar con datos reales
 
-### Baja prioridad
+### Baja prioridad / Post-launch
 - [ ] PWA manifest + service worker
-- [ ] Mi Porra / perfil — sin diseño
-- [ ] Comparar porras — sin diseño
-- [ ] Admin: scoring config — sin diseño
-- [ ] Admin: invitaciones — sin diseño
+- [ ] Comparar porras lado a lado (diff visual) — MVP solo vista individual
+- [ ] Admin: scoring config
+- [ ] Admin: invitaciones
 
 ---
+
+## Pantallas a diseñar en Claude Design (próxima sesión)
+
+| # | Pantalla | Descripción | Notas |
+|---|---|---|---|
+| 1 | **Extras/Bonus** | Sección 3 dentro de predicciones. 6 categorías: 3 jugadores (goleador, mejor jugador, asistente) con autocomplete + 2 equipos (más goleador, más goleado) con selector + 1 España (ronda eliminación con selector de ronda + rival condicional). Campeón/subcampeón/3º se deducen del bracket. | Mobile: lista vertical de cards. Desktop: grid 2 cols. Progreso X/6 en pill. Auto-save. |
+| 2 | **Mi Porra** | Tercer tab del bottom nav (`/pools/[id]/my-predictions`). Resumen compacto read-only: progreso global + mini-resumen de grupos (marcadores), bracket (campeón+finalista), extras (picks). Sección "¿Cómo se puntúa?" con tabla de puntuaciones (scoring_rules del pool) para que los participantes sepan qué vale cada acierto. Link "Ver mis porras" → `/pools`. Post-reveal: aciertos ✓/✗ y puntos. | Reemplaza tab "Mis porras". Misma estructura sirve para "ver porra de otro" (pantalla 3). |
+| 3 | **Ver porra de otro** | Desde leaderboard, tap en jugador → su porra. Misma estructura que Mi Porra pero datos de otro usuario. Solo visible en REVEALED/LIVE/CLOSED. | Puede ser misma page con userId dinámico o drawer/modal sobre leaderboard. |
+| 4 | **Admin: meter resultados** | Panel admin del pool. Lista de partidos con estado (pendiente/jugándose/finalizado). Input rápido de marcador. Sección aparte para bonus manuales (goleador, mejor jugador, asistente, equipos más goleador/goleado, primer goleador España por partido). | Mobile-first. Solo visible para is_admin=true. |
+| 5 | **Estados de pool** | No es pantalla nueva sino variantes de las existentes: banner LOCKED ("bloqueado, se revela el 11 jun"), banner REVEALED ("¡reveladas!"), badge LIVE pulsante. Inputs disabled con estilo claro en LOCKED. Resultados reales junto a predicciones en LIVE. | Afecta a predicciones, Mi Porra y leaderboard. |
+
+## Decisiones tomadas (sesión 2026-05-22/23)
+
+1. **Clasificados de grupo** — se derivan automáticamente de los marcadores predichos, NO input manual separado
+2. **Resultados oficiales** — MVP: entrada manual por admin. APIs de fútbol = nice-to-have post-MVP
+3. **Jugadores (goleador/asistente/mejor)** — autocomplete con datos de API o JSON estático, NO texto libre
+4. **Comparar porras** — post-launch. MVP solo vista individual de la porra de otro
+5. **Mi Porra** — reemplaza tab "Mis porras" en bottom nav. Resumen compacto + link a lista de pools
+6. **Primer goleador España** — ya implementado dentro de predicciones de grupos (match-card.tsx)
+7. **Campeón/subcampeón/tercer puesto** — se deducen del bracket, NO son extras que el usuario elija aparte. Cuentan como puntos de extras pero se derivan automáticamente.
 
 ## Decisiones pendientes
 
 1. **Puntuación final** — los puntos sugeridos en SPEC.md v2 son orientativos, el grupo debe confirmar
-2. **Lista de jugadores para goleador/asistente/mejor jugador** — ¿texto libre o lista cerrada?
-3. **UI de bonus** — no hay diseño, ¿diseñar antes de implementar?
+2. **Fuente de convocados** — de dónde sacar la lista de jugadores para autocomplete
 
 ---
 
