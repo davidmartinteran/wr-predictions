@@ -17,7 +17,7 @@ export function TeamBadge({ name, code, side }: TeamBadgeProps) {
       )}
     >
       <TeamFlag code={code} size={28} className="shrink-0" />
-      <div className="min-w-0">
+      <div className={cn("min-w-0", side === "away" && "text-right")}>
         <p className="text-[14px] text-zinc-100 font-medium truncate">{name}</p>
         <p className="text-[10px] text-zinc-500 tracking-wider uppercase">
           {side === "home" ? "Local" : "Visitante"}

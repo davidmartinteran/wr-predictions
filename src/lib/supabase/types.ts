@@ -353,6 +353,38 @@ export type Database = {
           },
         ]
       }
+      predictions_group_tiebreak: {
+        Row: {
+          group_letter: string
+          ordered_team_ids: string[]
+          pool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          group_letter: string
+          ordered_team_ids: string[]
+          pool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          group_letter?: string
+          ordered_team_ids?: string[]
+          pool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predictions_group_tiebreak_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       predictions_knockout: {
         Row: {
           created_at: string | null
