@@ -1,13 +1,23 @@
 "use client";
 
-import { useState, useCallback, useRef, useTransition, useMemo } from "react";
-import { Lock, Check, LayoutGrid, GitBranch, Star } from "lucide-react";
+import { useState, useCallback, useRef, useTransition, useMemo, useEffect } from "react";
+import { Lock, Check, LayoutGrid, GitBranch, Star, ChevronLeft, ChevronRight, Eye, Snowflake } from "lucide-react";
+import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
 import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
-import { savePrediction, saveFirstScorer } from "./actions";
+import { savePrediction, saveFirstScorer, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak } from "./actions";
+import { ExtrasSection, EXTRAS_TOTAL } from "@/components/predictions/extras-section";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
+import { computeStandings } from "@/lib/bracket/standings";
+import { deriveAllGroupStandings, rankThirdPlacedTeams, resolveThirds, buildBracketState, cascadeInvalidation, type BracketState, type ThirdPlaceTeam } from "@/lib/bracket/engine";
+import { TOTAL_BRACKET_PICKS, type Stage } from "@/lib/bracket/mapping";
+import { detectGroupTies } from "@/lib/bracket/standings";
+import { BracketMobileView } from "@/components/bracket/bracket-mobile";
+import { BracketDesktopView } from "@/components/bracket/bracket-desktop";
+import { ThirdsTiebreaker } from "@/components/bracket/thirds-tiebreaker";
+import { GroupTiebreakModal } from "@/components/bracket/group-tiebreak-modal";
 
 type Section = "groups" | "bracket" | "extras";
 
@@ -38,12 +48,49 @@ type FirstScorerPrediction = {
   player_name: string;
 };
 
+type ExtraPrediction = {
+  kind: string;
+  value: string;
+};
+
+type KnockoutPrediction = {
+  stage: string;
+  slot: number;
+  team_id: string;
+};
+
+type PoolParticipant = {
+  userId: string;
+  displayName: string;
+};
+
+type SavedTiebreak = {
+  group_letter: string;
+  ordered_team_ids: string[];
+};
+
 type Props = {
   poolId: string;
   matches: Match[];
   predictions: Prediction[];
   firstScorerPredictions: FirstScorerPrediction[];
+  extraPredictions: ExtraPrediction[];
+  allTeams: Team[];
+  knockoutPredictions: KnockoutPrediction[];
   disabled: boolean;
+  viewMode: ViewMode;
+  ownPredictions?: Prediction[] | null;
+  ownFirstScorerPredictions?: FirstScorerPrediction[] | null;
+  targetDisplayName?: string | null;
+  poolParticipants?: PoolParticipant[] | null;
+  targetUserId?: string;
+  savedTiebreaks: SavedTiebreak[];
+};
+
+const VIEW_COLORS: Record<ViewMode, string> = {
+  "own-open": "#1B9E5B",
+  "own-closed": "#F59E0B",
+  "viewing-other": "#A855F7",
 };
 
 const GROUPS = "ABCDEFGHIJKL".split("");
@@ -54,56 +101,12 @@ function getMatchday(matchNumber: number): number {
   return 3;
 }
 
-function computeStandings(
-  groupId: string,
-  matches: Match[],
-  scores: Record<string, { home: number | null; away: number | null }>
-) {
-  const groupMatches = matches.filter((m) => m.group_letter === groupId);
-  const teams: Record<string, { code: string; flag: string | null; name: string; pts: number; gf: number; ga: number; gd: number; pj: number }> = {};
-
-  for (const m of groupMatches) {
-    if (!teams[m.home_team_data.code]) {
-      teams[m.home_team_data.code] = { code: m.home_team_data.code, flag: m.home_team_data.flag_emoji, name: m.home_team_data.name, pts: 0, gf: 0, ga: 0, gd: 0, pj: 0 };
-    }
-    if (!teams[m.away_team_data.code]) {
-      teams[m.away_team_data.code] = { code: m.away_team_data.code, flag: m.away_team_data.flag_emoji, name: m.away_team_data.name, pts: 0, gf: 0, ga: 0, gd: 0, pj: 0 };
-    }
-  }
-
-  let counted = 0;
-  for (const m of groupMatches) {
-    const s = scores[m.id];
-    if (!s || s.home === null || s.away === null) continue;
-    counted++;
-    const h = s.home;
-    const a = s.away;
-    teams[m.home_team_data.code].gf += h;
-    teams[m.home_team_data.code].ga += a;
-    teams[m.home_team_data.code].pj += 1;
-    teams[m.away_team_data.code].gf += a;
-    teams[m.away_team_data.code].ga += h;
-    teams[m.away_team_data.code].pj += 1;
-    if (h > a) teams[m.home_team_data.code].pts += 3;
-    else if (h < a) teams[m.away_team_data.code].pts += 3;
-    else {
-      teams[m.home_team_data.code].pts += 1;
-      teams[m.away_team_data.code].pts += 1;
-    }
-  }
-
-  const rows = Object.values(teams)
-    .map((r) => ({ ...r, gd: r.gf - r.ga }))
-    .sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf);
-
-  return { rows, counted, total: groupMatches.length };
-}
 
 function isSpainMatch(match: Match): boolean {
   return match.home_team_data.code === "ESP" || match.away_team_data.code === "ESP";
 }
 
-export function PredictionsClient({ poolId, matches, predictions, firstScorerPredictions, disabled }: Props) {
+export function PredictionsClient({ poolId, matches, predictions, firstScorerPredictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, ownFirstScorerPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
   const [scores, setScores] = useState<Record<string, { home: number | null; away: number | null }>>(() => {
@@ -120,9 +123,34 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     }
     return initial;
   });
+  const [extras, setExtras] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const p of extraPredictions) {
+      initial[p.kind] = p.value;
+    }
+    return initial;
+  });
+  const [knockoutPicks, setKnockoutPicks] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const p of knockoutPredictions) {
+      initial[`${p.stage}:${p.slot}`] = p.team_id;
+    }
+    return initial;
+  });
+  const [groupTiebreaks, setGroupTiebreaks] = useState<Record<string, string[]>>(() => {
+    const initial: Record<string, string[]> = {};
+    for (const t of savedTiebreaks) {
+      initial[t.group_letter] = t.ordered_team_ids;
+    }
+    return initial;
+  });
+  const [selectedThirds, setSelectedThirds] = useState<string[]>([]);
+  const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(null);
   const [, startTransition] = useTransition();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const firstScorerTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const extraTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const knockoutTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const groupMatches = matches
     .filter((m) => m.group_letter === activeGroup)
@@ -150,10 +178,23 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     return gm.filter(isMatchComplete).length;
   }, [matches, isMatchComplete]);
 
-  const standings = useMemo(
-    () => computeStandings(activeGroup, matches, scores),
-    [activeGroup, matches, scores]
-  );
+  const standings = useMemo(() => {
+    const base = computeStandings(activeGroup, matches, scores);
+    const tiebreak = groupTiebreaks[activeGroup];
+    if (!tiebreak) return base;
+    // Only reorder the tied teams in-place, keeping everyone else in their original position
+    const rows = [...base.rows];
+    const tiedIndices = rows
+      .map((r, i) => tiebreak.includes(r.id) ? i : -1)
+      .filter((i) => i !== -1);
+    const reordered = tiebreak
+      .map((id) => rows.find((r) => r.id === id)!)
+      .filter(Boolean);
+    for (let i = 0; i < tiedIndices.length; i++) {
+      rows[tiedIndices[i]] = reordered[i];
+    }
+    return { ...base, rows };
+  }, [activeGroup, matches, scores, groupTiebreaks]);
 
   const handleScoreChange = useCallback(
     (matchId: string, home: number | null, away: number | null) => {
@@ -213,13 +254,235 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     setActiveSection("bracket");
   }, []);
 
+  const handleExtraChange = useCallback(
+    (kind: string, value: string | null) => {
+      if (value) {
+        setExtras((prev) => ({ ...prev, [kind]: value }));
+      } else {
+        setExtras((prev) => {
+          const next = { ...prev };
+          delete next[kind];
+          return next;
+        });
+      }
+
+      if (extraTimers.current[kind]) {
+        clearTimeout(extraTimers.current[kind]);
+      }
+      extraTimers.current[kind] = setTimeout(() => {
+        startTransition(async () => {
+          if (value) {
+            await saveExtra({ pool_id: poolId, kind: kind as "TOP_SCORER", value });
+          } else {
+            await deleteExtra({ pool_id: poolId, kind: kind as "TOP_SCORER" });
+          }
+        });
+      }, 500);
+    },
+    [poolId]
+  );
+
+  const extrasFilledCount = useMemo(() => {
+    let count = 0;
+    if (extras.TOP_SCORER) count++;
+    if (extras.BEST_PLAYER) count++;
+    if (extras.TOP_ASSISTER) count++;
+    if (extras.MOST_GOALS_TEAM) count++;
+    if (extras.MOST_CONCEDED_TEAM) count++;
+    return count;
+  }, [extras]);
+
   const allGroupsComplete = completedCount === totalMatches;
+
+  // Bracket computation — recomputes on any score change so group changes propagate
+  const allStandings = useMemo(
+    () => allGroupsComplete ? deriveAllGroupStandings(matches, scores) : null,
+    [allGroupsComplete, matches, scores]
+  );
+
+  const thirdsRanking = useMemo(
+    () => allStandings ? rankThirdPlacedTeams(allStandings) : null,
+    [allStandings]
+  );
+
+  // Clear stale selectedThirds when thirds ranking changes
+  const prevTiedIds = useRef<string>("");
+  useEffect(() => {
+    if (!thirdsRanking) return;
+    const tiedIds = thirdsRanking.tied.map((t) => t.id).join(",");
+    if (tiedIds !== prevTiedIds.current) {
+      prevTiedIds.current = tiedIds;
+      setSelectedThirds([]);
+    }
+  }, [thirdsRanking]);
+
+  const thirdsResolved = useMemo(() => {
+    if (!thirdsRanking) return false;
+    if (thirdsRanking.tied.length === 0) return true;
+    return selectedThirds.length === thirdsRanking.neededFromTied;
+  }, [thirdsRanking, selectedThirds]);
+
+  const bracketState = useMemo<BracketState | null>(() => {
+    if (!allStandings || !thirdsRanking || !thirdsResolved) return null;
+    const resolvedThirdTeams = thirdsRanking.tied.length === 0
+      ? thirdsRanking.autoQualified
+      : resolveThirds(
+          thirdsRanking.autoQualified,
+          thirdsRanking.tied.filter((t) => selectedThirds.includes(t.id))
+        );
+    return buildBracketState(allStandings, resolvedThirdTeams, knockoutPicks, groupTiebreaks);
+  }, [allStandings, thirdsRanking, thirdsResolved, selectedThirds, knockoutPicks, groupTiebreaks]);
+
+  // Clear all knockout picks when R32 teams change (group results altered qualified teams)
+  const prevR32Hash = useRef<string>("");
+  useEffect(() => {
+    if (!bracketState) return;
+    const hash = bracketState.matches.R32
+      .map((m) => `${m.homeTeam?.id ?? ""},${m.awayTeam?.id ?? ""}`)
+      .join("|");
+    if (prevR32Hash.current && prevR32Hash.current !== hash) {
+      setKnockoutPicks({});
+      startTransition(async () => {
+        const allPicks = Object.keys(knockoutPicks).map((k) => {
+          const [stage, slot] = k.split(":");
+          return { stage: stage as Stage, slot: Number(slot) };
+        });
+        if (allPicks.length > 0) {
+          await deleteKnockoutPredictions({ pool_id: poolId, picks: allPicks });
+        }
+      });
+    }
+    prevR32Hash.current = hash;
+  }, [bracketState, poolId]);
+
+  const handleKnockoutPick = useCallback(
+    (stage: Stage, slot: number, teamId: string) => {
+      const key = `${stage}:${slot}`;
+      const oldPick = knockoutPicks[key];
+
+      // If picking same team, deselect
+      if (oldPick === teamId) {
+        const invalidated = cascadeInvalidation(knockoutPicks, stage, slot);
+        const allToRemove = [{ stage, slot }, ...invalidated];
+        setKnockoutPicks((prev) => {
+          const next = { ...prev };
+          for (const r of allToRemove) delete next[`${r.stage}:${r.slot}`];
+          return next;
+        });
+        startTransition(async () => {
+          await deleteKnockoutPredictions({ pool_id: poolId, picks: allToRemove });
+        });
+        return;
+      }
+
+      // Cascade invalidation for old pick
+      const invalidated = oldPick ? cascadeInvalidation(knockoutPicks, stage, slot) : [];
+
+      setKnockoutPicks((prev) => {
+        const next = { ...prev, [key]: teamId };
+        for (const r of invalidated) delete next[`${r.stage}:${r.slot}`];
+        return next;
+      });
+
+      // Delete invalidated picks
+      if (invalidated.length > 0) {
+        startTransition(async () => {
+          await deleteKnockoutPredictions({ pool_id: poolId, picks: invalidated });
+        });
+      }
+
+      // Save new pick with debounce
+      if (knockoutTimers.current[key]) clearTimeout(knockoutTimers.current[key]);
+      knockoutTimers.current[key] = setTimeout(() => {
+        startTransition(async () => {
+          await saveKnockoutPrediction({ pool_id: poolId, stage, slot, team_id: teamId });
+        });
+      }, 300);
+    },
+    [poolId, knockoutPicks]
+  );
+
+  const handleThirdToggle = useCallback((teamId: string) => {
+    setSelectedThirds((prev) =>
+      prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId]
+    );
+  }, []);
+
+  const handleTiebreakResolve = useCallback((group: string, ordered: string[]) => {
+    setGroupTiebreaks((prev) => ({ ...prev, [group]: ordered }));
+    setTiebreakModal(null);
+    startTransition(async () => {
+      await saveGroupTiebreak({ pool_id: poolId, group_letter: group, ordered_team_ids: ordered });
+    });
+  }, [poolId]);
+
+  // Track standings hash per group to detect changes and invalidate tiebreaks
+  const prevStandingsHash = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const g of GROUPS) {
+      if (!groupComplete(g)) continue;
+      const s = computeStandings(g, matches, scores);
+      const hash = s.rows.map((r) => `${r.id}:${r.pts}:${r.gd}:${r.gf}`).join(",");
+      const prev = prevStandingsHash.current[g];
+      if (prev && prev !== hash) {
+        // Standings changed — clear old tiebreak resolution
+        setGroupTiebreaks((tb) => {
+          if (!tb[g]) return tb;
+          const next = { ...tb };
+          delete next[g];
+          return next;
+        });
+        startTransition(async () => {
+          await deleteGroupTiebreak({ pool_id: poolId, group_letter: g });
+        });
+      }
+      prevStandingsHash.current[g] = hash;
+    }
+  }, [scores, groupComplete, matches]);
+
+  // Auto-trigger group tiebreak modal when a complete group has a tie without resolution (only in own-open)
+  const pendingTiebreakGroup = useMemo(() => {
+    if (viewMode !== "own-open") return null;
+    if (tiebreakModal) return null;
+    for (const g of GROUPS) {
+      if (groupTiebreaks[g]) continue;
+      if (!groupComplete(g)) continue;
+      const s = computeStandings(g, matches, scores);
+      const tie = detectGroupTies(s);
+      if (tie) return g;
+    }
+    return null;
+  }, [viewMode, scores, groupComplete, matches, groupTiebreaks, tiebreakModal]);
+
+  useEffect(() => {
+    if (pendingTiebreakGroup) {
+      setTiebreakModal({ group: pendingTiebreakGroup });
+    }
+  }, [pendingTiebreakGroup]);
 
   const sectionCounts = useMemo(() => ({
     groups: { filled: completedCount, total: totalMatches },
-    bracket: { filled: 0, total: 31 },
-    extras: { filled: 0, total: 9 },
-  }), [completedCount, totalMatches]);
+    bracket: { filled: bracketState?.filledCount ?? 0, total: TOTAL_BRACKET_PICKS },
+    extras: { filled: extrasFilledCount, total: EXTRAS_TOTAL },
+  }), [completedCount, totalMatches, extrasFilledCount, bracketState]);
+
+  const ownScores = useMemo(() => {
+    if (!ownPredictions) return null;
+    const map: Record<string, { home: number | null; away: number | null }> = {};
+    for (const p of ownPredictions) {
+      map[p.match_id] = { home: p.home_score, away: p.away_score };
+    }
+    return map;
+  }, [ownPredictions]);
+
+  const ownFirstScorers = useMemo(() => {
+    if (!ownFirstScorerPredictions) return null;
+    const map: Record<string, string> = {};
+    for (const p of ownFirstScorerPredictions) {
+      map[p.match_id] = p.player_name;
+    }
+    return map;
+  }, [ownFirstScorerPredictions]);
 
   const sharedProps = {
     activeSection,
@@ -243,6 +506,29 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     handleFirstScorerChange,
     goNextGroup,
     goToBracket,
+    extras,
+    allTeams,
+    handleExtraChange,
+    extrasFilledCount,
+    poolId,
+    bracketState,
+    thirdsRanking,
+    thirdsResolved,
+    selectedThirds,
+    handleKnockoutPick,
+    handleThirdToggle,
+    groupTiebreaks,
+    setGroupTiebreaks,
+    tiebreakModal,
+    setTiebreakModal,
+    handleTiebreakResolve,
+    allStandings,
+    viewMode,
+    ownScores,
+    ownFirstScorers,
+    targetDisplayName,
+    poolParticipants,
+    targetUserId,
   };
 
   return (
@@ -265,28 +551,7 @@ type SectionCounts = {
   extras: { filled: number; total: number };
 };
 
-function MobileLayout({
-  activeSection,
-  setActiveSection,
-  sectionCounts,
-  allGroupsComplete,
-  activeGroup,
-  setActiveGroup,
-  groupMatches,
-  scores,
-  firstScorers,
-  completedCount,
-  totalMatches,
-  groupFilled,
-  groupComplete,
-  isMatchComplete,
-  standings,
-  disabled,
-  handleScoreChange,
-  handleFirstScorerChange,
-  goNextGroup,
-  goToBracket,
-}: {
+type LayoutProps = {
   activeSection: Section;
   setActiveSection: (s: Section) => void;
   sectionCounts: SectionCounts;
@@ -294,6 +559,7 @@ function MobileLayout({
   activeGroup: string;
   setActiveGroup: (g: string) => void;
   groupMatches: Match[];
+  matches: Match[];
   scores: Record<string, { home: number | null; away: number | null }>;
   firstScorers: Record<string, string>;
   completedCount: number;
@@ -307,19 +573,89 @@ function MobileLayout({
   handleFirstScorerChange: (matchId: string, playerName: string) => void;
   goNextGroup: () => void;
   goToBracket: () => void;
-}) {
+  extras: Record<string, string>;
+  allTeams: Team[];
+  handleExtraChange: (kind: string, value: string | null) => void;
+  extrasFilledCount: number;
+  poolId: string;
+  bracketState: BracketState | null;
+  thirdsRanking: ReturnType<typeof rankThirdPlacedTeams> | null;
+  thirdsResolved: boolean;
+  selectedThirds: string[];
+  handleKnockoutPick: (stage: Stage, slot: number, teamId: string) => void;
+  handleThirdToggle: (teamId: string) => void;
+  groupTiebreaks: Record<string, string[]>;
+  setGroupTiebreaks: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  tiebreakModal: { group: string } | null;
+  setTiebreakModal: React.Dispatch<React.SetStateAction<{ group: string } | null>>;
+  handleTiebreakResolve: (group: string, ordered: string[]) => void;
+  allStandings: Record<string, ReturnType<typeof computeStandings>> | null;
+  viewMode: ViewMode;
+  ownScores: Record<string, { home: number | null; away: number | null }> | null;
+  ownFirstScorers: Record<string, string> | null;
+  targetDisplayName?: string | null;
+  poolParticipants?: PoolParticipant[] | null;
+  targetUserId?: string;
+};
+
+function MobileLayout(props: LayoutProps) {
+  const {
+    activeSection, setActiveSection, sectionCounts, allGroupsComplete,
+    activeGroup, setActiveGroup, groupMatches, scores, firstScorers,
+    completedCount, totalMatches, groupFilled, groupComplete, isMatchComplete,
+    standings, disabled, handleScoreChange, handleFirstScorerChange,
+    goNextGroup, goToBracket, extras, allTeams, handleExtraChange,
+    extrasFilledCount, poolId, bracketState, thirdsRanking, thirdsResolved,
+    selectedThirds, handleKnockoutPick, handleThirdToggle, tiebreakModal,
+    setTiebreakModal, setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
+    ownFirstScorers, targetDisplayName, poolParticipants, targetUserId,
+  } = props;
+
+  const accentColor = VIEW_COLORS[viewMode];
+
   return (
     <div className="flex flex-col h-full">
+      {/* Frozen banner (own-closed) */}
+      {viewMode === "own-closed" && (
+        <div className="px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
+          <Snowflake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span className="text-[12px] text-amber-200 font-medium">Pronósticos congelados</span>
+          <span className="text-[11px] text-amber-400/60 ml-auto">Sólo lectura</span>
+        </div>
+      )}
+
+      {/* Viewing other player header */}
+      {viewMode === "viewing-other" && (
+        <ViewingOtherHeader
+          targetDisplayName={targetDisplayName ?? "Jugador"}
+          poolParticipants={poolParticipants ?? []}
+          targetUserId={targetUserId}
+          poolId={poolId}
+        />
+      )}
+
       {/* Header */}
       <div className="px-5 pt-2 pb-3 border-b border-zinc-800/80 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-            Pronósticos · Mundial 2026
+            {viewMode === "viewing-other"
+              ? `Porra de ${targetDisplayName}`
+              : "Pronósticos · Mundial 2026"}
           </div>
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
-            <Lock className="w-3 h-3" />
-            <span>Hasta 11 jun</span>
-          </div>
+          {viewMode === "own-open" && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+              <Lock className="w-3 h-3" />
+              <span>Hasta 11 jun</span>
+            </div>
+          )}
+          {viewMode === "viewing-other" && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-medium"
+              style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
+            >
+              <Eye className="w-3 h-3" />
+              <span>Sólo lectura</span>
+            </div>
+          )}
         </div>
 
         {/* Section tabs */}
@@ -329,7 +665,7 @@ function MobileLayout({
             icon={<LayoutGrid className="w-3.5 h-3.5" />}
             label="Grupos"
             count={`${sectionCounts.groups.filled}/${sectionCounts.groups.total}`}
-            color="#1B9E5B"
+            color={viewMode === "own-open" ? "#1B9E5B" : accentColor}
             onClick={() => setActiveSection("groups")}
           />
           <MobileSectionPill
@@ -337,8 +673,8 @@ function MobileLayout({
             icon={<GitBranch className="w-3.5 h-3.5" />}
             label="Bracket"
             count={`${sectionCounts.bracket.filled}/${sectionCounts.bracket.total}`}
-            color="#A855F7"
-            locked
+            color={viewMode === "own-open" ? "#A855F7" : accentColor}
+            locked={viewMode === "own-open"}
             onClick={() => setActiveSection("bracket")}
           />
           <MobileSectionPill
@@ -346,7 +682,7 @@ function MobileLayout({
             icon={<Star className="w-3.5 h-3.5" />}
             label="Extras"
             count={`${sectionCounts.extras.filled}/${sectionCounts.extras.total}`}
-            color="#F59E0B"
+            color={viewMode === "own-open" ? "#F59E0B" : accentColor}
             onClick={() => setActiveSection("extras")}
           />
         </div>
@@ -396,45 +732,54 @@ function MobileLayout({
             </div>
             <div className="space-y-2.5">
               {groupMatches.map((match) => (
-                <MatchCard
-                  key={match.id}
-                  matchId={match.id}
-                  matchday={getMatchday(match.match_number)}
-                  homeTeam={match.home_team_data}
-                  awayTeam={match.away_team_data}
-                  kickoff={match.kickoff}
-                  homeScore={scores[match.id]?.home ?? null}
-                  awayScore={scores[match.id]?.away ?? null}
-                  disabled={disabled}
-                  onScoreChange={handleScoreChange}
-                  isSpainMatch={isSpainMatch(match)}
-                  firstScorer={firstScorers[match.id] ?? ""}
-                  onFirstScorerChange={handleFirstScorerChange}
-                  complete={isMatchComplete(match)}
-                />
+                <div key={match.id}>
+                  <MatchCard
+                    matchId={match.id}
+                    matchday={getMatchday(match.match_number)}
+                    homeTeam={match.home_team_data}
+                    awayTeam={match.away_team_data}
+                    kickoff={match.kickoff}
+                    homeScore={scores[match.id]?.home ?? null}
+                    awayScore={scores[match.id]?.away ?? null}
+                    disabled={disabled}
+                    onScoreChange={handleScoreChange}
+                    isSpainMatch={isSpainMatch(match)}
+                    firstScorer={firstScorers[match.id] ?? ""}
+                    onFirstScorerChange={handleFirstScorerChange}
+                    complete={isMatchComplete(match)}
+                  />
+                  {viewMode === "viewing-other" && ownScores && (
+                    <OwnPredictionLine
+                      homeScore={ownScores[match.id]?.home ?? null}
+                      awayScore={ownScores[match.id]?.away ?? null}
+                    />
+                  )}
+                </div>
               ))}
             </div>
           </div>
 
           {/* Fixed bottom section: button + standings, above BottomNav */}
           <div className="fixed bottom-16 inset-x-0 z-40">
-            <div className="px-4 pb-2">
-              {activeGroup === "L" ? (
-                <button
-                  onClick={goToBracket}
-                  className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-                >
-                  Continuar al bracket →
-                </button>
-              ) : (
-                <button
-                  onClick={goNextGroup}
-                  className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-                >
-                  Siguiente grupo →
-                </button>
-              )}
-            </div>
+            {viewMode === "own-open" && (
+              <div className="px-4 pb-2">
+                {activeGroup === "L" ? (
+                  <button
+                    onClick={goToBracket}
+                    className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                  >
+                    Continuar al bracket →
+                  </button>
+                ) : (
+                  <button
+                    onClick={goNextGroup}
+                    className="w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                  >
+                    Siguiente grupo →
+                  </button>
+                )}
+              </div>
+            )}
             <div className="border-t border-zinc-800/80 bg-zinc-900/70 backdrop-blur px-4 py-2">
               <StandingsStrip
                 groupId={activeGroup}
@@ -448,23 +793,59 @@ function MobileLayout({
       )}
 
       {activeSection === "bracket" && (
-        <SectionPlaceholder
-          section="bracket"
-          groupsComplete={allGroupsComplete}
-          completedCount={completedCount}
-          totalMatches={totalMatches}
-          onGoToGroups={() => setActiveSection("groups")}
-        />
+        !allGroupsComplete ? (
+          <SectionPlaceholder
+            section="bracket"
+            groupsComplete={false}
+            completedCount={completedCount}
+            totalMatches={totalMatches}
+            onGoToGroups={() => setActiveSection("groups")}
+          />
+        ) : thirdsRanking && thirdsRanking.tied.length > 0 && !thirdsResolved ? (
+          <ThirdsTiebreaker
+            autoQualified={thirdsRanking.autoQualified}
+            tiedTeams={thirdsRanking.tied}
+            neededCount={thirdsRanking.neededFromTied}
+            selected={selectedThirds}
+            onToggle={handleThirdToggle}
+          />
+        ) : bracketState ? (
+          <BracketMobileView
+            bracketState={bracketState}
+            disabled={disabled}
+            onPickWinner={handleKnockoutPick}
+          />
+        ) : null
       )}
       {activeSection === "extras" && (
-        <SectionPlaceholder
-          section="extras"
-          groupsComplete={allGroupsComplete}
-          completedCount={completedCount}
-          totalMatches={totalMatches}
-          onGoToGroups={() => setActiveSection("groups")}
-        />
+        <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
+          <ExtrasSection
+            poolId={poolId}
+            extras={extras}
+            allTeams={allTeams}
+            disabled={disabled}
+            onExtraChange={handleExtraChange}
+            filledCount={extrasFilledCount}
+          />
+        </div>
       )}
+
+      {/* Group tiebreak modal */}
+      {tiebreakModal && props.allStandings && (() => {
+        const s = props.allStandings[tiebreakModal.group];
+        if (!s) return null;
+        const tie = detectGroupTies(s);
+        if (!tie) return null;
+        return (
+          <GroupTiebreakModal
+            groupLetter={tiebreakModal.group}
+            tiedTeams={tie.teams}
+            tiedPositions={tie.positions}
+            onResolve={(ordered) => handleTiebreakResolve(tiebreakModal.group, ordered)}
+            onClose={() => setTiebreakModal(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -583,53 +964,19 @@ function SectionPlaceholder({
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout({
-  activeSection,
-  setActiveSection,
-  sectionCounts,
-  allGroupsComplete,
-  activeGroup,
-  setActiveGroup,
-  groupMatches,
-  matches,
-  scores,
-  firstScorers,
-  completedCount,
-  totalMatches,
-  groupFilled,
-  groupComplete,
-  groupFilledCount,
-  isMatchComplete,
-  standings,
-  disabled,
-  handleScoreChange,
-  handleFirstScorerChange,
-  goNextGroup,
-  goToBracket,
-}: {
-  activeSection: Section;
-  setActiveSection: (s: Section) => void;
-  sectionCounts: SectionCounts;
-  allGroupsComplete: boolean;
-  activeGroup: string;
-  setActiveGroup: (g: string) => void;
-  groupMatches: Match[];
-  matches: Match[];
-  scores: Record<string, { home: number | null; away: number | null }>;
-  firstScorers: Record<string, string>;
-  completedCount: number;
-  totalMatches: number;
-  groupFilled: number;
-  groupComplete: (g: string) => boolean;
-  groupFilledCount: (g: string) => number;
-  isMatchComplete: (m: Match) => boolean;
-  standings: ReturnType<typeof computeStandings>;
-  disabled: boolean;
-  handleScoreChange: (matchId: string, home: number | null, away: number | null) => void;
-  handleFirstScorerChange: (matchId: string, playerName: string) => void;
-  goNextGroup: () => void;
-  goToBracket: () => void;
-}) {
+function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => number }) {
+  const {
+    activeSection, setActiveSection, sectionCounts, allGroupsComplete,
+    activeGroup, setActiveGroup, groupMatches, matches, scores, firstScorers,
+    completedCount, totalMatches, groupFilled, groupComplete, groupFilledCount,
+    isMatchComplete, standings, disabled, handleScoreChange, handleFirstScorerChange,
+    goNextGroup, goToBracket, extras, allTeams, handleExtraChange, extrasFilledCount,
+    poolId, bracketState, thirdsRanking, thirdsResolved, selectedThirds,
+    handleKnockoutPick, handleThirdToggle, tiebreakModal, setTiebreakModal,
+    setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores, ownFirstScorers,
+    targetDisplayName, poolParticipants, targetUserId,
+  } = props;
+  const accentColor = VIEW_COLORS[viewMode];
   const activeGroupTeams = useMemo(() => {
     const teamMap: Record<string, Team> = {};
     for (const m of groupMatches) {
@@ -648,15 +995,105 @@ function DesktopLayout({
     return days;
   }, [groupMatches]);
 
+  const targetInitials = targetDisplayName
+    ? targetDisplayName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+    : "??";
+
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Top header bar for viewing-other */}
+      {viewMode === "viewing-other" && (
+        <div className="h-12 border-b border-zinc-800/80 bg-zinc-950 flex items-center px-5 shrink-0 gap-4">
+          <a
+            href={`/pools/${poolId}/leaderboard`}
+            className="flex items-center gap-1.5 text-[12px] text-zinc-400 hover:text-zinc-200 transition-colors shrink-0"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Clasificación</span>
+          </a>
+
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+              style={{ background: "rgba(168, 85, 247, 0.2)", color: "#A855F7" }}
+            >
+              {targetInitials}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[10.5px] uppercase tracking-[0.12em] text-purple-400 font-medium">Porra de</span>
+                <span className="text-[14px] font-semibold text-zinc-50 truncate">{targetDisplayName}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {(() => {
+              const currentIdx = (poolParticipants ?? []).findIndex(p => p.userId === targetUserId);
+              const prev = currentIdx > 0 ? (poolParticipants ?? [])[currentIdx - 1] : null;
+              const next = currentIdx < (poolParticipants ?? []).length - 1 ? (poolParticipants ?? [])[currentIdx + 1] : null;
+              return (
+                <>
+                  {prev ? (
+                    <a href={`/pools/${poolId}/predictions?player=${prev.userId}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                      <ChevronLeft className="w-3 h-3" />
+                      Jugador anterior
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800/40 text-[11px] text-zinc-600 cursor-not-allowed">
+                      <ChevronLeft className="w-3 h-3" />
+                      Jugador anterior
+                    </span>
+                  )}
+                  {next ? (
+                    <a href={`/pools/${poolId}/predictions?player=${next.userId}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
+                    >
+                      Jugador siguiente
+                      <ChevronRight className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800/40 text-[11px] text-zinc-600 cursor-not-allowed">
+                      Jugador siguiente
+                      <ChevronRight className="w-3 h-3" />
+                    </span>
+                  )}
+                </>
+              );
+            })()}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[11px] font-medium ml-2"
+              style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
+            >
+              <Eye className="w-3 h-3" />
+              <span>Sólo lectura</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+    <div className="flex flex-1 min-h-0">
       {/* LEFT — sidebar */}
       <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
         <div className="p-5 border-b border-zinc-800/80">
           <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-1">
             Pronósticos · Mundial 2026
           </div>
+          {viewMode !== "own-open" && (
+            <div className="text-[10px] text-zinc-600">Sólo lectura</div>
+          )}
         </div>
+
+        {/* Frozen banner (desktop) */}
+        {viewMode === "own-closed" && (
+          <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
+            <Snowflake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <div>
+              <div className="text-[11px] text-amber-200 font-medium">Congelados</div>
+              <div className="text-[10px] text-amber-400/60">Sólo lectura</div>
+            </div>
+          </div>
+        )}
 
         {/* Section nav */}
         <div className="p-3 border-b border-zinc-800/80 flex flex-col gap-1">
@@ -666,7 +1103,7 @@ function DesktopLayout({
             label="Grupos"
             filled={sectionCounts.groups.filled}
             total={sectionCounts.groups.total}
-            color="#1B9E5B"
+            color={viewMode === "own-open" ? "#1B9E5B" : accentColor}
             onClick={() => setActiveSection("groups")}
           />
           <DesktopSectionItem
@@ -675,8 +1112,8 @@ function DesktopLayout({
             label="Bracket"
             filled={sectionCounts.bracket.filled}
             total={sectionCounts.bracket.total}
-            color="#A855F7"
-            locked
+            color={viewMode === "own-open" ? "#A855F7" : accentColor}
+            locked={viewMode === "own-open"}
             onClick={() => setActiveSection("bracket")}
           />
           <DesktopSectionItem
@@ -685,7 +1122,7 @@ function DesktopLayout({
             label="Extras"
             filled={sectionCounts.extras.filled}
             total={sectionCounts.extras.total}
-            color="#F59E0B"
+            color={viewMode === "own-open" ? "#F59E0B" : accentColor}
             onClick={() => setActiveSection("extras")}
           />
         </div>
@@ -740,11 +1177,16 @@ function DesktopLayout({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="text-[10.5px] text-zinc-500 tabular-nums">{filled}/6</div>
-                  {done && (
+                  {viewMode === "own-open" && (
+                    <div className="text-[10.5px] text-zinc-500 tabular-nums">{filled}/6</div>
+                  )}
+                  {done && viewMode === "own-open" && (
                     <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center bg-primary">
                       <Check className="w-2.5 h-2.5 text-zinc-950" />
                     </div>
+                  )}
+                  {viewMode !== "own-open" && (
+                    <Lock className="w-3.5 h-3.5 text-zinc-600" />
                   )}
                 </div>
               </button>
@@ -765,13 +1207,23 @@ function DesktopLayout({
                 Grupo {activeGroup}
               </h1>
               <div className="text-[13px] text-zinc-500">
-                6 partidos · {groupFilled} completados
+                6 partidos · {groupFilled}/{groupMatches.length} completos
               </div>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
-              <Lock className="w-3 h-3" />
-              <span>Bloqueo: 11 jun 17:00</span>
-            </div>
+            {viewMode === "own-open" && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+                <Lock className="w-3 h-3" />
+                <span>Bloqueo: 11 jun 17:00</span>
+              </div>
+            )}
+            {viewMode === "viewing-other" && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium"
+                style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
+              >
+                <Eye className="w-3 h-3" />
+                <span>Pronósticos de {targetDisplayName}</span>
+              </div>
+            )}
           </div>
 
           {/* Teams strip */}
@@ -808,7 +1260,7 @@ function DesktopLayout({
                   </div>
                   <div className="text-[11px] text-zinc-600">{dateStr}</div>
                 </div>
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 3xl:grid-cols-2 gap-3">
                   {dayMatches.map((match) => {
                     const s = scores[match.id];
                     const complete = isMatchComplete(match);
@@ -817,20 +1269,29 @@ function DesktopLayout({
                     const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
 
                     return (
-                      <DesktopMatchCard
-                        key={match.id}
-                        match={match}
-                        homeScore={s?.home ?? null}
-                        awayScore={s?.away ?? null}
-                        complete={complete}
-                        day={day}
-                        time={time}
-                        disabled={disabled}
-                        onScoreChange={handleScoreChange}
-                        isSpainMatch={isSpainMatch(match)}
-                        firstScorer={firstScorers[match.id] ?? ""}
-                        onFirstScorerChange={handleFirstScorerChange}
-                      />
+                      <div key={match.id}>
+                        <DesktopMatchCard
+                          match={match}
+                          homeScore={s?.home ?? null}
+                          awayScore={s?.away ?? null}
+                          complete={complete}
+                          day={day}
+                          time={time}
+                          disabled={disabled}
+                          onScoreChange={handleScoreChange}
+                          isSpainMatch={isSpainMatch(match)}
+                          firstScorer={firstScorers[match.id] ?? ""}
+                          onFirstScorerChange={handleFirstScorerChange}
+                          ownFirstScorer={ownFirstScorers?.[match.id]}
+                          viewMode={viewMode}
+                        />
+                        {viewMode === "viewing-other" && ownScores && (
+                          <OwnPredictionLine
+                            homeScore={ownScores[match.id]?.home ?? null}
+                            awayScore={ownScores[match.id]?.away ?? null}
+                          />
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -838,31 +1299,60 @@ function DesktopLayout({
             );
           })}
 
-          {activeGroup === "L" ? (
-            <button
-              onClick={goToBracket}
-              className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              Continuar al bracket →
-            </button>
-          ) : (
-            <button
-              onClick={goNextGroup}
-              className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              Siguiente grupo →
-            </button>
+          {viewMode === "own-open" && (
+            activeGroup === "L" ? (
+              <button
+                onClick={goToBracket}
+                className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+              >
+                Continuar al bracket →
+              </button>
+            ) : (
+              <button
+                onClick={goNextGroup}
+                className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+              >
+                Siguiente grupo →
+              </button>
+            )
           )}
         </div>
         )}
 
-        {activeSection !== "groups" && (
-          <SectionPlaceholder
-            section={activeSection as "bracket" | "extras"}
-            groupsComplete={allGroupsComplete}
-            completedCount={completedCount}
-            totalMatches={totalMatches}
-            onGoToGroups={() => setActiveSection("groups")}
+        {activeSection === "bracket" && (
+          !allGroupsComplete ? (
+            <SectionPlaceholder
+              section="bracket"
+              groupsComplete={false}
+              completedCount={completedCount}
+              totalMatches={totalMatches}
+              onGoToGroups={() => setActiveSection("groups")}
+            />
+          ) : thirdsRanking && thirdsRanking.tied.length > 0 && !thirdsResolved ? (
+            <ThirdsTiebreaker
+              autoQualified={thirdsRanking.autoQualified}
+              tiedTeams={thirdsRanking.tied}
+              neededCount={thirdsRanking.neededFromTied}
+              selected={selectedThirds}
+              onToggle={handleThirdToggle}
+            />
+          ) : bracketState ? (
+            <BracketDesktopView
+              bracketState={bracketState}
+              disabled={disabled}
+              onPickWinner={handleKnockoutPick}
+            />
+          ) : null
+        )}
+
+        {activeSection === "extras" && (
+          <ExtrasSection
+            poolId={poolId}
+            extras={extras}
+            allTeams={allTeams}
+            disabled={disabled}
+            onExtraChange={handleExtraChange}
+            filledCount={extrasFilledCount}
           />
         )}
       </main>
@@ -873,9 +1363,11 @@ function DesktopLayout({
         <DesktopStandingsCard
           groupId={activeGroup}
           standings={standings}
+          viewMode={viewMode}
         />
 
-        {/* Progress card */}
+        {/* Progress card (only own modes) */}
+        {viewMode !== "viewing-other" && (<>
         <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 mb-4">
           <div className="flex items-baseline justify-between mb-3">
             <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
@@ -947,8 +1439,38 @@ function DesktopLayout({
         <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 text-center">
           Tus pronósticos son <span className="text-zinc-300">anónimos</span> hasta el 11 jun.
         </p>
+        </>)}
+
+        {/* VS. TU PORRA section (viewing-other) */}
+        {viewMode === "viewing-other" && ownScores && (
+          <DesktopComparisonCard
+            groupMatches={groupMatches}
+            theirScores={scores}
+            ownScores={ownScores}
+            activeGroup={activeGroup}
+            targetDisplayName={targetDisplayName}
+          />
+        )}
       </aside>
       )}
+
+      {/* Group tiebreak modal */}
+      {tiebreakModal && props.allStandings && (() => {
+        const s = props.allStandings[tiebreakModal.group];
+        if (!s) return null;
+        const tie = detectGroupTies(s);
+        if (!tie) return null;
+        return (
+          <GroupTiebreakModal
+            groupLetter={tiebreakModal.group}
+            tiedTeams={tie.teams}
+            tiedPositions={tie.positions}
+            onResolve={(ordered) => handleTiebreakResolve(tiebreakModal.group, ordered)}
+            onClose={() => setTiebreakModal(null)}
+          />
+        );
+      })()}
+    </div>
     </div>
   );
 }
@@ -1020,6 +1542,8 @@ function DesktopMatchCard({
   isSpainMatch: spainMatch,
   firstScorer,
   onFirstScorerChange,
+  ownFirstScorer,
+  viewMode,
 }: {
   match: Match;
   homeScore: number | null;
@@ -1032,6 +1556,8 @@ function DesktopMatchCard({
   isSpainMatch?: boolean;
   firstScorer?: string;
   onFirstScorerChange?: (matchId: string, playerName: string) => void;
+  ownFirstScorer?: string;
+  viewMode?: ViewMode;
 }) {
   const handleHome = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1061,10 +1587,10 @@ function DesktopMatchCard({
       <div className="flex items-center justify-between mb-3 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500">
         <div>{day} · {time}</div>
       </div>
-      <div className="flex items-center gap-2 xl:gap-3">
-        <div className="flex items-center gap-2 xl:gap-2.5 flex-1 min-w-0">
-          <TeamFlag code={match.home_team_data.code} size={32} className="shrink-0 xl:w-9 xl:h-9" />
-          <div className="text-[13px] xl:text-[15px] text-zinc-100 font-medium truncate">
+      <div className="flex items-center gap-2 xl:gap-4 3xl:gap-3">
+        <div className="flex items-center gap-2 xl:gap-3 3xl:gap-2.5 flex-1 min-w-0">
+          <TeamFlag code={match.home_team_data.code} size={32} className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9" />
+          <div className="text-[13px] xl:text-[17px] 3xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.home_team_data.name}
           </div>
         </div>
@@ -1093,42 +1619,246 @@ function DesktopMatchCard({
             style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
           />
         </div>
-        <div className="flex items-center gap-2 xl:gap-2.5 flex-1 min-w-0 justify-end text-right">
-          <div className="text-[13px] xl:text-[15px] text-zinc-100 font-medium truncate">
+        <div className="flex items-center gap-2 xl:gap-3 3xl:gap-2.5 flex-1 min-w-0 justify-end text-right">
+          <div className="text-[13px] xl:text-[17px] 3xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.away_team_data.name}
           </div>
-          <TeamFlag code={match.away_team_data.code} size={32} className="shrink-0 xl:w-9 xl:h-9" />
+          <TeamFlag code={match.away_team_data.code} size={32} className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9" />
         </div>
       </div>
 
-      {spainMatch && onFirstScorerChange && (
+      {spainMatch && (
         <div className="mt-3 pt-3 border-t border-zinc-800/60">
           <div className="flex items-center justify-between mb-1.5">
             <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-400">
               <span>⚽</span>
-              <span className="uppercase tracking-[0.1em]">Primer gol · Bonus España</span>
+              <span className="uppercase tracking-[0.1em]">Primer gol España</span>
             </div>
-            <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-              +10 PTS
-            </span>
-          </div>
-          <input
-            type="text"
-            value={firstScorer ?? ""}
-            placeholder="Jugador..."
-            onChange={(e) => onFirstScorerChange(match.id, e.target.value)}
-            disabled={disabled}
-            className={cn(
-              "w-full h-11 rounded-lg bg-zinc-950 border text-[13px] text-zinc-100 px-3",
-              "placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/25",
-              "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
-              firstScorer
-                ? "border-primary/60"
-                : "border-zinc-800"
+            {viewMode !== "viewing-other" && (
+              <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                +10 PTS
+              </span>
             )}
-          />
+          </div>
+          {viewMode === "viewing-other" ? (
+            <div className="flex items-center gap-2 text-[13px]">
+              <span className="text-zinc-100 font-medium">{firstScorer || "—"}</span>
+              {ownFirstScorer && (
+                <span className="text-[11px] text-zinc-500">· tu pick: {ownFirstScorer}</span>
+              )}
+            </div>
+          ) : onFirstScorerChange ? (
+            <input
+              type="text"
+              value={firstScorer ?? ""}
+              placeholder="Jugador..."
+              onChange={(e) => onFirstScorerChange(match.id, e.target.value)}
+              disabled={disabled}
+              className={cn(
+                "w-full h-11 rounded-lg bg-zinc-950 border text-[13px] text-zinc-100 px-3",
+                "placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/25",
+                "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
+                firstScorer
+                  ? "border-primary/60"
+                  : "border-zinc-800"
+              )}
+            />
+          ) : null}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── View mode components ───────────────────────────────────
+
+function ViewingOtherHeader({
+  targetDisplayName,
+  poolParticipants,
+  targetUserId,
+  poolId,
+}: {
+  targetDisplayName: string;
+  poolParticipants: PoolParticipant[];
+  targetUserId?: string;
+  poolId: string;
+}) {
+  const otherPlayers = poolParticipants.filter((p) => p.userId !== targetUserId);
+  const currentIdx = poolParticipants.findIndex((p) => p.userId === targetUserId);
+  const prevPlayer = currentIdx > 0 ? poolParticipants[currentIdx - 1] : null;
+  const nextPlayer = currentIdx < poolParticipants.length - 1 ? poolParticipants[currentIdx + 1] : null;
+
+  return (
+    <div className="px-4 py-2.5 border-b border-purple-500/20 bg-purple-500/8 flex items-center gap-2 shrink-0">
+      <a
+        href={`/pools/${poolId}/predictions`}
+        className="p-1 rounded-md hover:bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </a>
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] font-medium text-purple-300 truncate">{targetDisplayName}</div>
+        <div className="text-[10px] text-purple-400/60">Viendo su porra</div>
+      </div>
+      <div className="flex items-center gap-1">
+        {prevPlayer && (
+          <a
+            href={`/pools/${poolId}/predictions?player=${prevPlayer.userId}`}
+            className="p-1 rounded-md hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </a>
+        )}
+        {nextPlayer && (
+          <a
+            href={`/pools/${poolId}/predictions?player=${nextPlayer.userId}`}
+            className="p-1 rounded-md hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OwnPredictionLine({
+  homeScore,
+  awayScore,
+}: {
+  homeScore: number | null;
+  awayScore: number | null;
+}) {
+  const hasPrediction = homeScore !== null && awayScore !== null;
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 px-4 text-[11px]">
+      <span className="text-zinc-600 text-[8px]">●</span>
+      <span className="text-zinc-500">Tu pronóstico</span>
+      {hasPrediction ? (
+        <span className="text-zinc-400 tabular-nums font-medium" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+          {homeScore} – {awayScore}
+        </span>
+      ) : (
+        <span className="text-zinc-600">—</span>
+      )}
+    </div>
+  );
+}
+
+function DesktopPlayerNav({
+  poolParticipants,
+  targetUserId,
+  poolId,
+}: {
+  poolParticipants: PoolParticipant[];
+  targetUserId?: string;
+  poolId: string;
+}) {
+  const currentIdx = poolParticipants.findIndex((p) => p.userId === targetUserId);
+  const prevPlayer = currentIdx > 0 ? poolParticipants[currentIdx - 1] : null;
+  const nextPlayer = currentIdx < poolParticipants.length - 1 ? poolParticipants[currentIdx + 1] : null;
+
+  return (
+    <div className="rounded-xl border border-purple-500/30 bg-purple-500/8 p-3 mb-4">
+      <div className="text-[10px] uppercase tracking-[0.12em] text-purple-400 font-medium mb-2">
+        Navegando porras
+      </div>
+      <div className="flex items-center justify-between">
+        {prevPlayer ? (
+          <a
+            href={`/pools/${poolId}/predictions?player=${prevPlayer.userId}`}
+            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            <ChevronLeft className="w-3 h-3" />
+            <span className="truncate max-w-[70px]">{prevPlayer.displayName}</span>
+          </a>
+        ) : <span />}
+        {nextPlayer ? (
+          <a
+            href={`/pools/${poolId}/predictions?player=${nextPlayer.userId}`}
+            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            <span className="truncate max-w-[70px]">{nextPlayer.displayName}</span>
+            <ChevronRight className="w-3 h-3" />
+          </a>
+        ) : <span />}
+      </div>
+      <a
+        href={`/pools/${poolId}/predictions`}
+        className="mt-2 block text-center text-[10.5px] text-purple-400 hover:text-purple-300 transition-colors"
+      >
+        ← Volver a mi porra
+      </a>
+    </div>
+  );
+}
+
+function DesktopComparisonCard({
+  groupMatches,
+  theirScores,
+  ownScores,
+  activeGroup,
+  targetDisplayName,
+}: {
+  groupMatches: Match[];
+  theirScores: Record<string, { home: number | null; away: number | null }>;
+  ownScores: Record<string, { home: number | null; away: number | null }>;
+  activeGroup: string;
+  targetDisplayName?: string | null;
+}) {
+  let exact = 0;
+  let sameSign = 0;
+  let total = 0;
+
+  for (const m of groupMatches) {
+    const theirs = theirScores[m.id];
+    const mine = ownScores[m.id];
+    if (!theirs || !mine) continue;
+    if (theirs.home === null || theirs.away === null || mine.home === null || mine.away === null) continue;
+    total++;
+    if (theirs.home === mine.home && theirs.away === mine.away) {
+      exact++;
+      sameSign++;
+    } else {
+      const theirSign = Math.sign(theirs.home - theirs.away);
+      const mySign = Math.sign(mine.home - mine.away);
+      if (theirSign === mySign) sameSign++;
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-purple-500/30 bg-purple-500/8 p-4 mb-4">
+      <div className="text-[10.5px] uppercase tracking-[0.12em] text-purple-400 font-medium mb-3">
+        VS. Tu porra · Grupo {activeGroup}
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
+          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">Marcadores exactos</div>
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-[22px] font-bold text-zinc-50 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+              {exact}
+            </span>
+            <span className="text-[13px] text-zinc-600 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+              /{total}
+            </span>
+          </div>
+        </div>
+        <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
+          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">Mismo signo</div>
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-[22px] font-bold text-purple-300 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+              {sameSign}
+            </span>
+            <span className="text-[13px] text-zinc-600 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+              /{total}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="text-[11px] text-zinc-500 leading-relaxed">
+        {targetDisplayName} apostó parecido a ti en este grupo en <span className="text-zinc-300 font-medium">{sameSign} de {total}</span> partidos.
+      </div>
     </div>
   );
 }
@@ -1136,28 +1866,37 @@ function DesktopMatchCard({
 function DesktopStandingsCard({
   groupId,
   standings,
+  viewMode,
 }: {
   groupId: string;
   standings: ReturnType<typeof computeStandings>;
+  viewMode?: ViewMode;
 }) {
   const { rows, counted, total } = standings;
   const provisional = counted < total;
+  const isViewing = viewMode === "viewing-other";
 
   return (
     <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 mb-4 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80">
         <div>
           <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-            Tu clasificación
+            {isViewing ? "Su clasificación" : "Tu clasificación"}
           </div>
           <div className="text-[13px] font-semibold text-zinc-100 leading-tight">
             Grupo {groupId}
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10.5px] text-zinc-500 tabular-nums">{counted}/{total}</div>
-          {provisional && counted > 0 && (
-            <div className="text-[10px] text-amber-400/80">Provisional</div>
+          {provisional ? (
+            <>
+              <div className="text-[10.5px] text-zinc-500 tabular-nums">{counted}/{total}</div>
+              {counted > 0 && (
+                <div className="text-[10px] text-amber-400/80">Provisional</div>
+              )}
+            </>
+          ) : (
+            <div className="text-[10px] font-medium text-primary">Definitiva</div>
           )}
         </div>
       </div>
@@ -1202,8 +1941,8 @@ function DesktopStandingsCard({
                         <span className="text-zinc-500 tabular-nums">{i + 1}</span>
                       </div>
                     </td>
-                    <td className="py-2 pl-2 text-zinc-100">
-                      <div className="flex items-center gap-1.5">
+                    <td className="py-2 pl-2 text-zinc-100 max-w-0 overflow-hidden">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <TeamFlag code={r.code} size={16} className="shrink-0" />
                         <span className={cn("text-[11.5px] truncate", r.pj > 0 ? "" : "text-zinc-500")}>
                           {r.name}

@@ -22,13 +22,14 @@ function hexAlpha(hex: string, a: number) {
 }
 
 type Props = {
+  poolId: string;
   poolName: string;
   players: PlayerEntry[];
   playerCount: number;
   isLive: boolean;
 };
 
-export function LeaderboardClient({ poolName, players, playerCount, isLive }: Props) {
+export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive }: Props) {
   const [metric, setMetric] = useState<Category>("TOTAL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -46,7 +47,7 @@ export function LeaderboardClient({ poolName, players, playerCount, isLive }: Pr
     setExpandedId((prev) => (prev === userId ? null : userId));
   }, []);
 
-  const sharedProps = { metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive };
+  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive };
 
   return (
     <>
@@ -61,6 +62,7 @@ export function LeaderboardClient({ poolName, players, playerCount, isLive }: Pr
 }
 
 type LayoutProps = {
+  poolId: string;
   metric: Category;
   setMetric: (m: Category) => void;
   sorted: PlayerEntry[];
@@ -174,7 +176,7 @@ function CategoryDots() {
 
 // ─── Breakdown (expand) ──────────────────────────────────────
 
-function MobileBreakdown({ player }: { player: PlayerEntry }) {
+function MobileBreakdown({ player, poolId }: { player: PlayerEntry; poolId: string }) {
   return (
     <div className="px-3 pb-3 -mt-1">
       <div className="rounded-lg border border-zinc-800/60 p-3" style={{ background: "rgb(9 9 11 / 0.6)" }}>
@@ -200,12 +202,18 @@ function MobileBreakdown({ player }: { player: PlayerEntry }) {
             );
           })}
         </div>
+        <a
+          href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+          className="mt-3 block w-full h-8 rounded-lg text-[11.5px] font-medium text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60 transition-colors flex items-center justify-center"
+        >
+          Ver porra de {player.displayName.split(" ")[0]} →
+        </a>
       </div>
     </div>
   );
 }
 
-function DesktopBreakdown({ player }: { player: PlayerEntry }) {
+function DesktopBreakdown({ player, poolId }: { player: PlayerEntry; poolId: string }) {
   return (
     <div className="px-4 py-4 border-t border-zinc-800/60" style={{ background: "rgb(9 9 11 / 0.4)" }}>
       <div className="flex gap-8">
@@ -250,9 +258,12 @@ function DesktopBreakdown({ player }: { player: PlayerEntry }) {
               <span className="text-[20px] font-bold tabular-nums text-zinc-500" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>0</span>
             </div>
           </div>
-          <button className="w-full h-9 rounded-lg text-[12.5px] font-medium text-zinc-200 border border-zinc-800 hover:bg-zinc-900 transition-colors">
+          <a
+            href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+            className="block w-full h-9 rounded-lg text-[12.5px] font-medium text-zinc-200 border border-zinc-800 hover:bg-zinc-900 transition-colors flex items-center justify-center"
+          >
             Ver pronósticos de {player.displayName.split(" ")[0]} →
-          </button>
+          </a>
         </div>
       </div>
     </div>
@@ -261,7 +272,7 @@ function DesktopBreakdown({ player }: { player: PlayerEntry }) {
 
 // ─── Mobile Layout ───────────────────────────────────────────
 
-function MobileLayout({ metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive }: LayoutProps) {
+function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -317,7 +328,7 @@ function MobileLayout({ metric, setMetric, sorted, expandedId, toggleExpand, pla
                   </div>
                   <ChevronRight className={cn("w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0", isOpen && "rotate-90")} />
                 </button>
-                {isOpen && <MobileBreakdown player={p} />}
+                {isOpen && <MobileBreakdown player={p} poolId={poolId} />}
               </div>
             );
           })}
@@ -360,7 +371,7 @@ function PodiumSlot({ player, rank, height, avatarSize, showStar }: {
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout({ metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive }: LayoutProps) {
+function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -461,7 +472,7 @@ function DesktopLayout({ metric, setMetric, sorted, expandedId, toggleExpand, po
                   </div>
                 </button>
 
-                {isOpen && <DesktopBreakdown player={p} />}
+                {isOpen && <DesktopBreakdown player={p} poolId={poolId} />}
               </div>
             );
           })}

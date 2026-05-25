@@ -134,6 +134,7 @@ export default async function LeaderboardPage({
 
   return (
     <LeaderboardClient
+      poolId={poolId}
       poolName={pool?.name ?? "Porra"}
       players={players}
       playerCount={players.length}
