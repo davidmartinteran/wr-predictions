@@ -6,7 +6,7 @@ import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
 import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
-import { savePrediction, saveFirstScorer, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak } from "./actions";
+import { savePrediction, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak } from "./actions";
 import { ExtrasSection, EXTRAS_TOTAL } from "@/components/predictions/extras-section";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
@@ -43,11 +43,6 @@ type Prediction = {
   away_score: number;
 };
 
-type FirstScorerPrediction = {
-  match_id: string;
-  player_name: string;
-};
-
 type ExtraPrediction = {
   kind: string;
   value: string;
@@ -73,14 +68,12 @@ type Props = {
   poolId: string;
   matches: Match[];
   predictions: Prediction[];
-  firstScorerPredictions: FirstScorerPrediction[];
   extraPredictions: ExtraPrediction[];
   allTeams: Team[];
   knockoutPredictions: KnockoutPrediction[];
   disabled: boolean;
   viewMode: ViewMode;
   ownPredictions?: Prediction[] | null;
-  ownFirstScorerPredictions?: FirstScorerPrediction[] | null;
   targetDisplayName?: string | null;
   poolParticipants?: PoolParticipant[] | null;
   targetUserId?: string;
@@ -102,24 +95,13 @@ function getMatchday(matchNumber: number): number {
 }
 
 
-function isSpainMatch(match: Match): boolean {
-  return match.home_team_data.code === "ESP" || match.away_team_data.code === "ESP";
-}
-
-export function PredictionsClient({ poolId, matches, predictions, firstScorerPredictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, ownFirstScorerPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks }: Props) {
+export function PredictionsClient({ poolId, matches, predictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
   const [scores, setScores] = useState<Record<string, { home: number | null; away: number | null }>>(() => {
     const initial: Record<string, { home: number | null; away: number | null }> = {};
     for (const p of predictions) {
       initial[p.match_id] = { home: p.home_score, away: p.away_score };
-    }
-    return initial;
-  });
-  const [firstScorers, setFirstScorers] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    for (const p of firstScorerPredictions) {
-      initial[p.match_id] = p.player_name;
     }
     return initial;
   });
@@ -148,7 +130,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
   const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(null);
   const [, startTransition] = useTransition();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const firstScorerTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const extraTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const knockoutTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -159,9 +140,8 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
   const isMatchComplete = useCallback((m: Match) => {
     const s = scores[m.id];
     if (!s || s.home === null || s.away === null) return false;
-    if (isSpainMatch(m) && !firstScorers[m.id]?.trim()) return false;
     return true;
-  }, [scores, firstScorers]);
+  }, [scores]);
 
   const totalMatches = matches.length;
   const completedCount = matches.filter(isMatchComplete).length;
@@ -219,29 +199,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     [poolId]
   );
 
-  const handleFirstScorerChange = useCallback(
-    (matchId: string, playerName: string) => {
-      setFirstScorers((prev) => ({ ...prev, [matchId]: playerName }));
-
-      if (firstScorerTimers.current[matchId]) {
-        clearTimeout(firstScorerTimers.current[matchId]);
-      }
-
-      const trimmed = playerName.trim();
-      if (trimmed.length > 0) {
-        firstScorerTimers.current[matchId] = setTimeout(() => {
-          startTransition(async () => {
-            await saveFirstScorer({
-              match_id: matchId,
-              pool_id: poolId,
-              player_name: trimmed,
-            });
-          });
-        }, 800);
-      }
-    },
-    [poolId]
-  );
 
   const goNextGroup = useCallback(() => {
     const idx = GROUPS.indexOf(activeGroup);
@@ -475,15 +432,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     return map;
   }, [ownPredictions]);
 
-  const ownFirstScorers = useMemo(() => {
-    if (!ownFirstScorerPredictions) return null;
-    const map: Record<string, string> = {};
-    for (const p of ownFirstScorerPredictions) {
-      map[p.match_id] = p.player_name;
-    }
-    return map;
-  }, [ownFirstScorerPredictions]);
-
   const sharedProps = {
     activeSection,
     setActiveSection,
@@ -494,7 +442,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     groupMatches,
     matches,
     scores,
-    firstScorers,
     completedCount,
     totalMatches,
     groupFilled,
@@ -503,7 +450,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     standings,
     disabled,
     handleScoreChange,
-    handleFirstScorerChange,
     goNextGroup,
     goToBracket,
     extras,
@@ -525,7 +471,6 @@ export function PredictionsClient({ poolId, matches, predictions, firstScorerPre
     allStandings,
     viewMode,
     ownScores,
-    ownFirstScorers,
     targetDisplayName,
     poolParticipants,
     targetUserId,
@@ -561,7 +506,6 @@ type LayoutProps = {
   groupMatches: Match[];
   matches: Match[];
   scores: Record<string, { home: number | null; away: number | null }>;
-  firstScorers: Record<string, string>;
   completedCount: number;
   totalMatches: number;
   groupFilled: number;
@@ -570,7 +514,6 @@ type LayoutProps = {
   standings: ReturnType<typeof computeStandings>;
   disabled: boolean;
   handleScoreChange: (matchId: string, home: number | null, away: number | null) => void;
-  handleFirstScorerChange: (matchId: string, playerName: string) => void;
   goNextGroup: () => void;
   goToBracket: () => void;
   extras: Record<string, string>;
@@ -592,7 +535,6 @@ type LayoutProps = {
   allStandings: Record<string, ReturnType<typeof computeStandings>> | null;
   viewMode: ViewMode;
   ownScores: Record<string, { home: number | null; away: number | null }> | null;
-  ownFirstScorers: Record<string, string> | null;
   targetDisplayName?: string | null;
   poolParticipants?: PoolParticipant[] | null;
   targetUserId?: string;
@@ -601,14 +543,14 @@ type LayoutProps = {
 function MobileLayout(props: LayoutProps) {
   const {
     activeSection, setActiveSection, sectionCounts, allGroupsComplete,
-    activeGroup, setActiveGroup, groupMatches, scores, firstScorers,
+    activeGroup, setActiveGroup, groupMatches, scores,
     completedCount, totalMatches, groupFilled, groupComplete, isMatchComplete,
-    standings, disabled, handleScoreChange, handleFirstScorerChange,
+    standings, disabled, handleScoreChange,
     goNextGroup, goToBracket, extras, allTeams, handleExtraChange,
     extrasFilledCount, poolId, bracketState, thirdsRanking, thirdsResolved,
     selectedThirds, handleKnockoutPick, handleThirdToggle, tiebreakModal,
     setTiebreakModal, setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
-    ownFirstScorers, targetDisplayName, poolParticipants, targetUserId,
+    targetDisplayName, poolParticipants, targetUserId,
   } = props;
 
   const accentColor = VIEW_COLORS[viewMode];
@@ -743,9 +685,6 @@ function MobileLayout(props: LayoutProps) {
                     awayScore={scores[match.id]?.away ?? null}
                     disabled={disabled}
                     onScoreChange={handleScoreChange}
-                    isSpainMatch={isSpainMatch(match)}
-                    firstScorer={firstScorers[match.id] ?? ""}
-                    onFirstScorerChange={handleFirstScorerChange}
                     complete={isMatchComplete(match)}
                   />
                   {viewMode === "viewing-other" && ownScores && (
@@ -967,13 +906,13 @@ function SectionPlaceholder({
 function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => number }) {
   const {
     activeSection, setActiveSection, sectionCounts, allGroupsComplete,
-    activeGroup, setActiveGroup, groupMatches, matches, scores, firstScorers,
+    activeGroup, setActiveGroup, groupMatches, matches, scores,
     completedCount, totalMatches, groupFilled, groupComplete, groupFilledCount,
-    isMatchComplete, standings, disabled, handleScoreChange, handleFirstScorerChange,
+    isMatchComplete, standings, disabled, handleScoreChange,
     goNextGroup, goToBracket, extras, allTeams, handleExtraChange, extrasFilledCount,
     poolId, bracketState, thirdsRanking, thirdsResolved, selectedThirds,
     handleKnockoutPick, handleThirdToggle, tiebreakModal, setTiebreakModal,
-    setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores, ownFirstScorers,
+    setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
     targetDisplayName, poolParticipants, targetUserId,
   } = props;
   const accentColor = VIEW_COLORS[viewMode];
@@ -1279,10 +1218,6 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
                           time={time}
                           disabled={disabled}
                           onScoreChange={handleScoreChange}
-                          isSpainMatch={isSpainMatch(match)}
-                          firstScorer={firstScorers[match.id] ?? ""}
-                          onFirstScorerChange={handleFirstScorerChange}
-                          ownFirstScorer={ownFirstScorers?.[match.id]}
                           viewMode={viewMode}
                         />
                         {viewMode === "viewing-other" && ownScores && (
@@ -1539,10 +1474,6 @@ function DesktopMatchCard({
   time,
   disabled,
   onScoreChange,
-  isSpainMatch: spainMatch,
-  firstScorer,
-  onFirstScorerChange,
-  ownFirstScorer,
   viewMode,
 }: {
   match: Match;
@@ -1553,10 +1484,6 @@ function DesktopMatchCard({
   time: string;
   disabled: boolean;
   onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
-  isSpainMatch?: boolean;
-  firstScorer?: string;
-  onFirstScorerChange?: (matchId: string, playerName: string) => void;
-  ownFirstScorer?: string;
   viewMode?: ViewMode;
 }) {
   const handleHome = useCallback(
@@ -1627,45 +1554,6 @@ function DesktopMatchCard({
         </div>
       </div>
 
-      {spainMatch && (
-        <div className="mt-3 pt-3 border-t border-zinc-800/60">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-400">
-              <span>⚽</span>
-              <span className="uppercase tracking-[0.1em]">Primer gol España</span>
-            </div>
-            {viewMode !== "viewing-other" && (
-              <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded">
-                +10 PTS
-              </span>
-            )}
-          </div>
-          {viewMode === "viewing-other" ? (
-            <div className="flex items-center gap-2 text-[13px]">
-              <span className="text-zinc-100 font-medium">{firstScorer || "—"}</span>
-              {ownFirstScorer && (
-                <span className="text-[11px] text-zinc-500">· tu pick: {ownFirstScorer}</span>
-              )}
-            </div>
-          ) : onFirstScorerChange ? (
-            <input
-              type="text"
-              value={firstScorer ?? ""}
-              placeholder="Jugador..."
-              onChange={(e) => onFirstScorerChange(match.id, e.target.value)}
-              disabled={disabled}
-              className={cn(
-                "w-full h-11 rounded-lg bg-zinc-950 border text-[13px] text-zinc-100 px-3",
-                "placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/25",
-                "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
-                firstScorer
-                  ? "border-primary/60"
-                  : "border-zinc-800"
-              )}
-            />
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }

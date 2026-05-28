@@ -55,12 +55,6 @@ export default async function PredictionsPage({
     .eq("user_id", predictionsUserId)
     .eq("pool_id", poolId);
 
-  const { data: firstScorerPreds } = await supabase
-    .from("predictions_first_scorer")
-    .select("match_id, player_name")
-    .eq("user_id", predictionsUserId)
-    .eq("pool_id", poolId);
-
   const { data: extraPredictions } = await supabase
     .from("predictions_extra")
     .select("kind, value")
@@ -87,7 +81,6 @@ export default async function PredictionsPage({
 
   // When viewing another player, also fetch current user's predictions for comparison
   let ownPredictions: { match_id: string; home_score: number; away_score: number }[] | null = null;
-  let ownFirstScorerPredictions: { match_id: string; player_name: string }[] | null = null;
   let targetDisplayName: string | null = null;
   let poolParticipants: { userId: string; displayName: string }[] | null = null;
 
@@ -101,16 +94,6 @@ export default async function PredictionsPage({
       match_id: p.match_id,
       home_score: p.home_score,
       away_score: p.away_score,
-    }));
-
-    const { data: ownFS } = await supabase
-      .from("predictions_first_scorer")
-      .select("match_id, player_name")
-      .eq("user_id", user.id)
-      .eq("pool_id", poolId);
-    ownFirstScorerPredictions = (ownFS ?? []).map((p) => ({
-      match_id: p.match_id,
-      player_name: p.player_name,
     }));
 
     const { data: participants } = await supabase
@@ -145,10 +128,6 @@ export default async function PredictionsPage({
         home_score: p.home_score,
         away_score: p.away_score,
       }))}
-      firstScorerPredictions={(firstScorerPreds ?? []).map((p) => ({
-        match_id: p.match_id,
-        player_name: p.player_name,
-      }))}
       extraPredictions={(extraPredictions ?? []).map((p) => ({
         kind: p.kind,
         value: p.value,
@@ -167,7 +146,6 @@ export default async function PredictionsPage({
       disabled={viewMode !== "own-open"}
       viewMode={viewMode}
       ownPredictions={ownPredictions}
-      ownFirstScorerPredictions={ownFirstScorerPredictions}
       targetDisplayName={targetDisplayName}
       poolParticipants={poolParticipants}
       targetUserId={viewingOther ? targetUserId : undefined}

@@ -5,14 +5,12 @@ import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star } from "luci
 import { cn } from "@/lib/utils";
 import type { PlayerEntry } from "./page";
 
-type Category = "TOTAL" | "GROUP_MATCHES" | "GROUP_QUALIFIERS" | "KNOCKOUT" | "EXTRAS" | "FIRST_SCORER_ESP";
+type Category = "TOTAL" | "RESULTS" | "CLASSIFICATIONS" | "EXTRAS";
 
 const SCORE_CATS: { key: Category; label: string; short: string; abbr: string; color: string; max: number }[] = [
-  { key: "GROUP_MATCHES",    label: "Partidos de grupo", short: "Grupos",  abbr: "GR", color: "#1B9E5B", max: 216 },
-  { key: "GROUP_QUALIFIERS", label: "Clasificados",      short: "Clasif.", abbr: "CL", color: "#3B82F6", max: 72  },
-  { key: "KNOCKOUT",         label: "Eliminatorias",     short: "Elim.",   abbr: "EL", color: "#A855F7", max: 108 },
-  { key: "EXTRAS",           label: "Premios",           short: "Premios", abbr: "PR", color: "#F59E0B", max: 120 },
-  { key: "FIRST_SCORER_ESP", label: "Goleador España",   short: "Gol ES",  abbr: "ES", color: "#EF4444", max: 70  },
+  { key: "RESULTS",         label: "Resultados",     short: "Result.", abbr: "RE", color: "#1B9E5B", max: 225 },
+  { key: "CLASSIFICATIONS", label: "Clasificación",  short: "Clasif.", abbr: "CL", color: "#A855F7", max: 242 },
+  { key: "EXTRAS",          label: "Extras",         short: "Extras",  abbr: "EX", color: "#F59E0B", max: 60  },
 ];
 
 const GOLD = "#D4AF37";
@@ -320,7 +318,7 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
                       {p.displayName}
                       {p.isCurrentUser && <span className="text-[10px] ml-1.5 font-normal" style={{ color: "var(--color-primary)" }}>· tú</span>}
                     </div>
-                    <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos · {p.signHits} signos</div>
+                    <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos</div>
                   </div>
                   <div className="text-right shrink-0">
                     <PointsMono value={value} size={16} />
@@ -444,7 +442,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                         {p.displayName}
                         {p.isCurrentUser && <span className="text-[10.5px] ml-1.5 font-normal" style={{ color: "var(--color-primary)" }}>· tú</span>}
                       </div>
-                      <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos · {p.signHits} signos</div>
+                      <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos</div>
                     </div>
                   </div>
 
@@ -503,7 +501,7 @@ function DesktopPodium({ podium }: { podium: PlayerEntry[] }) {
                 </span>
               </div>
               <div className="text-[15px] font-semibold text-zinc-100 truncate">{player.displayName}</div>
-              <div className="text-[10.5px] text-zinc-500 tabular-nums">{player.exactHits} exactos · {player.signHits} signos</div>
+              <div className="text-[10.5px] text-zinc-500 tabular-nums">{player.exactHits} exactos</div>
             </div>
             <div className="text-right shrink-0">
               <PointsMono value={player.scores.TOTAL} size={28} />

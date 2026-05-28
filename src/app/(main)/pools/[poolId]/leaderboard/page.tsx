@@ -15,32 +15,25 @@ export type PlayerEntry = {
   initials: string;
   isCurrentUser: boolean;
   scores: {
-    GROUP_MATCHES: number;
-    GROUP_QUALIFIERS: number;
-    KNOCKOUT: number;
+    RESULTS: number;
+    CLASSIFICATIONS: number;
     EXTRAS: number;
-    FIRST_SCORER_ESP: number;
     TOTAL: number;
   };
   maxScores: {
-    GROUP_MATCHES: number;
-    GROUP_QUALIFIERS: number;
-    KNOCKOUT: number;
+    RESULTS: number;
+    CLASSIFICATIONS: number;
     EXTRAS: number;
-    FIRST_SCORER_ESP: number;
     TOTAL: number;
   };
   exactHits: number;
-  signHits: number;
 };
 
 const MAX_SCORES = {
-  GROUP_MATCHES: 216,
-  GROUP_QUALIFIERS: 72,
-  KNOCKOUT: 108,
-  EXTRAS: 120,
-  FIRST_SCORER_ESP: 70,
-  TOTAL: 586,
+  RESULTS: 225,
+  CLASSIFICATIONS: 242,
+  EXTRAS: 60,
+  TOTAL: 527,
 };
 
 function getInitials(name: string): string {
@@ -83,22 +76,14 @@ export default async function LeaderboardPage({
     scoresByUser[row.user_id].push(row);
   }
 
-  const categories = [
-    "GROUP_MATCHES",
-    "GROUP_QUALIFIERS",
-    "KNOCKOUT",
-    "EXTRAS",
-    "FIRST_SCORER_ESP",
-  ] as const;
+  const categories = ["RESULTS", "CLASSIFICATIONS", "EXTRAS"] as const;
 
   const players: PlayerEntry[] = (participants ?? []).map((p) => {
     const userScores = scoresByUser[p.user_id] ?? [];
     const scores: PlayerEntry["scores"] = {
-      GROUP_MATCHES: 0,
-      GROUP_QUALIFIERS: 0,
-      KNOCKOUT: 0,
+      RESULTS: 0,
+      CLASSIFICATIONS: 0,
       EXTRAS: 0,
-      FIRST_SCORER_ESP: 0,
       TOTAL: 0,
     };
 
@@ -109,7 +94,7 @@ export default async function LeaderboardPage({
       if (cat in scores) {
         scores[cat] = row.points;
       }
-      if (cat === "GROUP_MATCHES") {
+      if (cat === "RESULTS") {
         exactHits = row.exact_hits;
       }
     }
@@ -124,7 +109,6 @@ export default async function LeaderboardPage({
       scores,
       maxScores: MAX_SCORES,
       exactHits,
-      signHits: 0,
     };
   });
 

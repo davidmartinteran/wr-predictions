@@ -10,51 +10,9 @@ const predictionSchema = z.object({
   away_score: z.number().int().min(0).max(15),
 });
 
-const firstScorerSchema = z.object({
-  match_id: z.string().uuid(),
-  pool_id: z.string().uuid(),
-  player_name: z.string().min(1).max(100),
-});
-
-export async function saveFirstScorer(data: z.infer<typeof firstScorerSchema>) {
-  const parsed = firstScorerSchema.safeParse(data);
-  if (!parsed.success) {
-    return { error: "Datos no válidos" };
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "No autenticado" };
-  }
-
-  const { error } = await supabase
-    .from("predictions_first_scorer")
-    .upsert(
-      {
-        user_id: user.id,
-        pool_id: parsed.data.pool_id,
-        match_id: parsed.data.match_id,
-        player_name: parsed.data.player_name,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,pool_id,match_id" }
-    );
-
-  if (error) {
-    return { error: "No se pudo guardar el primer goleador" };
-  }
-
-  return { success: true };
-}
-
 const EXTRA_KINDS = [
   "TOP_SCORER", "BEST_PLAYER", "TOP_ASSISTER",
   "MOST_GOALS_TEAM", "MOST_CONCEDED_TEAM",
-  "SPAIN_ELIM_ROUND", "SPAIN_ELIM_RIVAL",
 ] as const;
 
 const extraSchema = z.object({
