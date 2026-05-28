@@ -86,6 +86,25 @@ Clasificación: `C:\Users\david\Downloads\PORRA WC\screens-clasificacion.jsx` + 
 | LeaderboardClient | `src/app/(main)/pools/[poolId]/leaderboard/leaderboard-client.tsx` | Podio + tabla expandible, mobile + desktop |
 | shadcn/ui | `src/components/ui/` | badge, button, card, input, table, tabs, toggle, toggle-group |
 
+### Cambios de la sesión 2026-05-28 (bracket FIFA oficial)
+
+1. **Bracket R32 reescrito con estructura FIFA oficial** (`src/lib/bracket/mapping.ts`)
+   - Estructura anterior (inventada): 12 partidos 1ro vs 2do + 4 partidos 3ro vs 3ro
+   - **Estructura real FIFA:** 8 partidos 1ro vs 3ro + 4 de 1ro vs 2do + 4 de 2do vs 2do
+   - 16 slots del R32 ordenados para que el árbol binario reproduzca el cuadro FIFA (M73-M88)
+   - `possibleGroups` por partido de terceros en vez del antiguo `thirdSlot` indexado
+   - Fuente: [Wikipedia - 2026 FIFA World Cup knockout stage](https://en.wikipedia.org/wiki/2026_FIFA_World_Cup_knockout_stage)
+
+2. **495 combinaciones oficiales FIFA (Anexo C)** (`src/lib/bracket/third-place-combinations.json`, 40KB)
+   - Parseadas y validadas de la tabla de Wikipedia (basada en regulaciones FIFA)
+   - Cada entrada: clave = 8 grupos ordenados, valor = asignación de grupo a slot del R32
+   - `assignThirdsToSlots()` reemplaza backtracking heurístico por lookup determinista
+   - Todas las 495 combinaciones tienen múltiples soluciones válidas → necesario usar la tabla FIFA exacta
+
+3. **Engine actualizado** (`src/lib/bracket/engine.ts`)
+   - `buildBracketState()` usa `assignThirdsToSlots()` para resolver qué tercero va a qué partido
+   - Lookup por grupo de origen en vez de índice de ranking
+
 ### Cambios de sesiones 2026-05-23→27 (bracket, extras, view modes, multipool UX)
 
 1. **Bracket engine** (`src/lib/bracket/`)
@@ -248,6 +267,7 @@ Clasificación: `C:\Users\david\Downloads\PORRA WC\screens-clasificacion.jsx` + 
 - [x] **Extras/Bonus** — ✅ 5 categorías con autocomplete jugadores + selector equipos
 - [x] **Bracket eliminatorias** — ✅ Engine completo + UI mobile/desktop + tiebreaks + persistencia
 - [x] **Ver porra de otro** — ✅ Desde leaderboard post-deadline, comparación lado a lado con predicciones propias
+- [x] **Bracket R32 oficial FIFA** — ✅ Reescrito con estructura real (1ro vs 3ro, 2do vs 2do) + 495 combinaciones Anexo C
 - [ ] **Mi Porra** — tercer tab del bottom nav. Resumen compacto read-only de predicciones del usuario en el pool actual + link a "/pools".
 - [ ] **Estados de pool en UI** — feedback visual para LOCKED (banner + inputs disabled), REVEALED (banner + habilitar ver porras ajenas), LIVE (badge EN VIVO + resultados reales junto a predicciones).
 - [ ] **Migración predictions_group_tiebreak** — tabla usada en código pero sin migración formal
@@ -308,6 +328,10 @@ Clasificación: `C:\Users\david\Downloads\PORRA WC\screens-clasificacion.jsx` + 
 2. **Resultados vía API** — API-Football como fuente principal. Admin solo override + "mejor jugador" manual. No hay panel admin de entrada manual de resultados.
 
 3. **Jugadores para autocomplete** — JSON estático (~500 convocados), sin API. Se contrasta con API-Football al puntuar.
+
+## Decisiones tomadas (sesión 2026-05-28)
+
+1. **Bracket R32 oficial FIFA** — La estructura inventada (1ro×2do cruzados + 3ro×3ro) se reemplazó por la oficial de FIFA: 8 partidos de 1ro vs 3ro, 4 de 1ro vs 2do cruzados, 4 de 2do vs 2do. Las 495 combinaciones del Anexo C se parsean de un JSON (lookup determinista) en vez de resolverse por backtracking, ya que todas tienen múltiples soluciones válidas y solo la de FIFA es la correcta.
 
 ## Decisiones pendientes
 
