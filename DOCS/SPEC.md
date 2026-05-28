@@ -26,7 +26,7 @@ Ver "Fuera de scope" en `PROJECT_PROFILE.md`.
 | Persona | Descripción | Necesidades |
 |---|---|---|
 | **Participante** | Amigo del grupo, ~20-50 personas | Meter pronóstico fácil desde el móvil, ver clasificación, sentir que es justo |
-| **Admin** | David (única persona con rol admin en MVP) | Crear pool, configurar scoring, meter resultados oficiales, invitar amigos |
+| **Admin** | David (única persona con rol admin en MVP) | Crear pool, configurar scoring, override de resultados si falla la API, invitar amigos |
 
 ---
 
@@ -221,7 +221,7 @@ Backup manual: el admin puede forzar el revelado desde el panel.
 ### US-05 — Meter goleador, mejor jugador y asistente
 **Como** participante, **quiero** elegir jugadores para "máximo goleador", "mejor jugador" y "máximo asistente" **para que** se evalúe al final.
 - Tres selectores con autocomplete sobre lista de jugadores convocados.
-- Búsqueda por nombre con datos cargados desde API de fútbol o JSON estático (squad lists).
+- Búsqueda por nombre con datos cargados desde JSON estático (~500 jugadores convocados). No requiere API.
 - Incluido en la sección "Extras" de predicciones junto con las categorías de equipo y España.
 
 ### US-06 — Editar pronóstico
@@ -247,12 +247,14 @@ Backup manual: el admin puede forzar el revelado desde el panel.
 - Solo disponible cuando el pool está en REVEALED/LIVE/CLOSED (RLS lo garantiza).
 - *Post-launch:* vista lado a lado comparando tu porra con la de otro (diff visual).
 
-### US-10 — Admin: meter resultados
-**Como** admin, **quiero** introducir los resultados reales de los partidos **para que** se recalculen los puntos.
-- MVP: entrada manual por el admin. Vista de partidos pendientes, mobile-first, input rápido de marcador.
-- Nice-to-have (post-MVP): automatizar con APIs de fútbol (polling cada 30 min).
-- También meter ganadores de bonus que no se deducen del bracket: `best_player`, `top_scorer`, `top_assister`, `most_goals_team`, `most_conceded_team`, `first_scorer_esp`.
+### US-10 — Resultados automáticos vía API
+**Como** sistema, **quiero** obtener resultados de partidos automáticamente de API-Football **para que** se recalculen los puntos sin intervención manual.
+- Fuente principal: API-Football (RapidAPI). Polling cada 30 min en días de partido via Edge Function cron.
+- Datos obtenidos: marcadores finales, goleadores por partido, tabla de goleadores acumulados.
+- `top_scorer`, `top_assister`, `most_goals_team`, `most_conceded_team`, `first_scorer_esp` se obtienen de la API.
+- `best_player` (Balón de Oro FIFA) se mete manualmente al final del torneo (único dato manual).
 - `runner_up`, `third_place` y `champion` se deducen automáticamente de los resultados del bracket — no se meten manualmente.
+- Override manual: el admin puede corregir un resultado si la API trae datos incorrectos o tarda. Los overrides manuales no se sobrescriben en el siguiente polling.
 - Trigger automático recalcula scores cuando un partido pasa a `finished = true`.
 
 ### US-11 — Admin: configurar scoring
