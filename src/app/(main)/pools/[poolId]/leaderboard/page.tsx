@@ -32,8 +32,8 @@ export type PlayerEntry = {
 const MAX_SCORES = {
   RESULTS: 225,
   CLASSIFICATIONS: 242,
-  EXTRAS: 60,
-  TOTAL: 527,
+  EXTRAS: 101,
+  TOTAL: 568,
 };
 
 function getInitials(name: string): string {
@@ -63,7 +63,7 @@ export default async function LeaderboardPage({
     { data: participants },
     { data: scoreRows },
   ] = await Promise.all([
-    supabase.from("pools").select("name, status").eq("id", poolId).maybeSingle(),
+    supabase.from("pools").select("name, status, deadline").eq("id", poolId).maybeSingle(),
     supabase.from("participations").select("user_id, display_name").eq("pool_id", poolId),
     supabase.from("scores").select("user_id, category, points, exact_hits").eq("pool_id", poolId),
   ]);
@@ -115,6 +115,7 @@ export default async function LeaderboardPage({
   players.sort((a, b) => b.scores.TOTAL - a.scores.TOTAL || b.exactHits - a.exactHits);
 
   const isLive = pool?.status === "LIVE" || pool?.status === "REVEALED";
+  const isPastDeadline = pool?.deadline ? new Date(pool.deadline) < new Date() : false;
 
   return (
     <LeaderboardClient
@@ -123,6 +124,8 @@ export default async function LeaderboardPage({
       players={players}
       playerCount={players.length}
       isLive={isLive}
+      canViewOthers={isPastDeadline}
+      deadline={pool?.deadline ?? ""}
     />
   );
 }

@@ -1,16 +1,35 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star } from "lucide-react";
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlayerEntry } from "./page";
 
 type Category = "TOTAL" | "RESULTS" | "CLASSIFICATIONS" | "EXTRAS";
 
-const SCORE_CATS: { key: Category; label: string; short: string; abbr: string; color: string; max: number }[] = [
-  { key: "RESULTS",         label: "Resultados",     short: "Result.", abbr: "RE", color: "#1B9E5B", max: 225 },
-  { key: "CLASSIFICATIONS", label: "Clasificación",  short: "Clasif.", abbr: "CL", color: "#A855F7", max: 242 },
-  { key: "EXTRAS",          label: "Extras",         short: "Extras",  abbr: "EX", color: "#F59E0B", max: 60  },
+type ScoreCat = { key: Category; label: string; short: string; abbr: string; color: string; max: number; detail: string[] };
+
+const SCORE_CATS: ScoreCat[] = [
+  { key: "RESULTS", label: "Resultados", short: "Result.", abbr: "RE", color: "#1B9E5B", max: 225, detail: [
+    "Signo correcto (1X2) → 1 pt",
+    "Marcador exacto → 3 pts",
+    "Partidos de España → ×2",
+    "72 partidos de grupo",
+  ]},
+  { key: "CLASSIFICATIONS", label: "Clasificación", short: "Clasif.", abbr: "CL", color: "#A855F7", max: 242, detail: [
+    "Predice hasta dónde llega cada equipo",
+    "Grupos 2 · R32 3 · R16 5 · Cuartos 8",
+    "Semis 12 · Subcampeón 18 · Campeón 25",
+    "±1 ronda → 50% · ±2 → 25% · ±3+ → 0",
+    "España → ×2",
+  ]},
+  { key: "EXTRAS", label: "Extras", short: "Extras", abbr: "EX", color: "#F59E0B", max: 101, detail: [
+    "Bota de Oro 15 · Máx. asistente 15",
+    "Mejor jugador 10 · Mejor joven 10",
+    "Mejor portero 10",
+    "Equipo +goles 10 · Equipo +goleado 10",
+    "Podio: 1º exacto 12 · 2º 6 · 3º 3",
+  ]},
 ];
 
 const GOLD = "#D4AF37";
@@ -25,11 +44,21 @@ type Props = {
   players: PlayerEntry[];
   playerCount: number;
   isLive: boolean;
+  canViewOthers: boolean;
+  deadline: string;
 };
 
-export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive }: Props) {
+function formatDeadline(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline }: Props) {
   const [metric, setMetric] = useState<Category>("TOTAL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const deadlineLabel = useMemo(() => formatDeadline(deadline), [deadline]);
 
   const sorted = useMemo(() => {
     const list = [...players];
@@ -45,7 +74,7 @@ export function LeaderboardClient({ poolId, poolName, players, playerCount, isLi
     setExpandedId((prev) => (prev === userId ? null : userId));
   }, []);
 
-  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive };
+  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel };
 
   return (
     <>
@@ -69,6 +98,8 @@ type LayoutProps = {
   poolName: string;
   playerCount: number;
   isLive: boolean;
+  canViewOthers: boolean;
+  deadlineLabel: string;
 };
 
 // ─── Primitives ──────────────────────────────────────────────
@@ -172,46 +203,86 @@ function CategoryDots() {
   );
 }
 
+// ─── Expandable category bar ────────────────────────────────
+
+function CategoryBar({ cat, value, expanded, onToggle, compact }: { cat: ScoreCat; value: number; expanded: boolean; onToggle: () => void; compact?: boolean }) {
+  const pct = Math.min(100, (value / cat.max) * 100);
+  const labelW = compact ? "w-[88px]" : "w-[130px]";
+  const scoreW = compact ? "w-14" : "w-16";
+  const labelSize = compact ? "text-[11px]" : "text-[12px]";
+  const scoreSize = compact ? "text-[11px]" : "text-[13px]";
+  const subSize = compact ? "text-[9.5px]" : "text-[10px]";
+  const gap = compact ? "gap-2.5" : "gap-3";
+  const barH = compact ? "h-1.5" : "h-1.5";
+
+  return (
+    <div>
+      <button onClick={onToggle} className={cn("w-full flex items-center", gap, "group")}>
+        <div className={cn(labelW, "flex items-center gap-1.5")}>
+          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: cat.color }} />
+          <span className={cn(labelSize, "text-zinc-300 truncate")}>{compact ? cat.short : cat.label}</span>
+          <HelpCircle className="w-2.5 h-2.5 text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
+        </div>
+        <div className={cn("flex-1 rounded-full overflow-hidden", barH)} style={{ background: "rgb(39 39 42 / 0.6)" }}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: cat.color, opacity: 0.85 }} />
+        </div>
+        <div className={cn(scoreW, "text-right")}>
+          <span className={cn(scoreSize, "font-semibold tabular-nums")} style={{ color: cat.color, fontFamily: "var(--font-mono), ui-monospace, monospace" }}>{value}</span>
+          <span className={cn(subSize, "text-zinc-600 tabular-nums")}>/{cat.max}</span>
+        </div>
+      </button>
+      {expanded && (
+        <div className={cn("mt-1 mb-1 space-y-0.5", compact ? "pl-[24px]" : "pl-[28px]")}>
+          {cat.detail.map((l) => (
+            <div key={l} className="text-[10px] text-zinc-500 leading-relaxed">{l}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Breakdown (expand) ──────────────────────────────────────
 
-function MobileBreakdown({ player, poolId }: { player: PlayerEntry; poolId: string }) {
+function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+  const canView = player.isCurrentUser || canViewOthers;
+  const [expandedCat, setExpandedCat] = useState<Category | null>(null);
   return (
     <div className="px-3 pb-3 -mt-1">
       <div className="rounded-lg border border-zinc-800/60 p-3" style={{ background: "rgb(9 9 11 / 0.6)" }}>
         <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 mb-2.5">Desglose</div>
         <div className="space-y-2">
-          {SCORE_CATS.map((c) => {
-            const v = player.scores[c.key];
-            const pct = Math.min(100, (v / c.max) * 100);
-            return (
-              <div key={c.key} className="flex items-center gap-2.5">
-                <div className="w-[88px] flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.color }} />
-                  <span className="text-[11px] text-zinc-300 truncate">{c.short}</span>
-                </div>
-                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(39 39 42 / 0.6)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: c.color, opacity: 0.85 }} />
-                </div>
-                <div className="w-14 text-right">
-                  <span className="text-[11px] font-semibold tabular-nums" style={{ color: c.color, fontFamily: "var(--font-mono), ui-monospace, monospace" }}>{v}</span>
-                  <span className="text-[9.5px] text-zinc-600 tabular-nums">/{c.max}</span>
-                </div>
-              </div>
-            );
-          })}
+          {SCORE_CATS.map((c) => (
+            <CategoryBar
+              key={c.key}
+              cat={c}
+              value={player.scores[c.key]}
+              expanded={expandedCat === c.key}
+              onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
+              compact
+            />
+          ))}
         </div>
-        <a
-          href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
-          className="mt-3 block w-full h-8 rounded-lg text-[11.5px] font-medium text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60 transition-colors flex items-center justify-center"
-        >
-          Ver porra de {player.displayName.split(" ")[0]} →
-        </a>
+        {canView ? (
+          <a
+            href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+            className="mt-3 block w-full h-8 rounded-lg text-[11.5px] font-medium text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60 transition-colors flex items-center justify-center"
+          >
+            Ver porra de {player.displayName.split(" ")[0]} →
+          </a>
+        ) : !player.isCurrentUser && (
+          <div className="mt-3 w-full h-8 rounded-lg text-[11px] text-zinc-600 border border-zinc-800/40 flex items-center justify-center">
+            Visible a partir del {deadlineLabel}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function DesktopBreakdown({ player, poolId }: { player: PlayerEntry; poolId: string }) {
+function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+  const canView = player.isCurrentUser || canViewOthers;
+  const [expandedCat, setExpandedCat] = useState<Category | null>(null);
   return (
     <div className="px-4 py-4 border-t border-zinc-800/60" style={{ background: "rgb(9 9 11 / 0.4)" }}>
       <div className="flex gap-8">
@@ -221,25 +292,15 @@ function DesktopBreakdown({ player, poolId }: { player: PlayerEntry; poolId: str
             Desglose · cómo se construyen los {player.scores.TOTAL} pts
           </div>
           <div className="space-y-2.5">
-            {SCORE_CATS.map((c) => {
-              const v = player.scores[c.key];
-              const pct = Math.min(100, (v / c.max) * 100);
-              return (
-                <div key={c.key} className="flex items-center gap-3">
-                  <div className="w-[130px] flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: c.color }} />
-                    <span className="text-[12px] text-zinc-300">{c.label}</span>
-                  </div>
-                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgb(39 39 42 / 0.6)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: c.color, opacity: 0.85 }} />
-                  </div>
-                  <div className="w-16 text-right tabular-nums">
-                    <span className="text-[13px] font-semibold" style={{ color: c.color, fontFamily: "var(--font-mono), ui-monospace, monospace" }}>{v}</span>
-                    <span className="text-[10px] text-zinc-600"> / {c.max}</span>
-                  </div>
-                </div>
-              );
-            })}
+            {SCORE_CATS.map((c) => (
+              <CategoryBar
+                key={c.key}
+                cat={c}
+                value={player.scores[c.key]}
+                expanded={expandedCat === c.key}
+                onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
+              />
+            ))}
           </div>
         </div>
 
@@ -256,12 +317,18 @@ function DesktopBreakdown({ player, poolId }: { player: PlayerEntry; poolId: str
               <span className="text-[20px] font-bold tabular-nums text-zinc-500" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>0</span>
             </div>
           </div>
-          <a
-            href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
-            className="block w-full h-9 rounded-lg text-[12.5px] font-medium text-zinc-200 border border-zinc-800 hover:bg-zinc-900 transition-colors flex items-center justify-center"
-          >
-            Ver pronósticos de {player.displayName.split(" ")[0]} →
-          </a>
+          {canView ? (
+            <a
+              href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+              className="block w-full h-9 rounded-lg text-[12.5px] font-medium text-zinc-200 border border-zinc-800 hover:bg-zinc-900 transition-colors flex items-center justify-center"
+            >
+              Ver pronósticos de {player.displayName.split(" ")[0]} →
+            </a>
+          ) : !player.isCurrentUser && (
+            <div className="w-full h-9 rounded-lg text-[12px] text-zinc-600 border border-zinc-800/40 flex items-center justify-center">
+              Visible a partir del {deadlineLabel}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -270,7 +337,7 @@ function DesktopBreakdown({ player, poolId }: { player: PlayerEntry; poolId: str
 
 // ─── Mobile Layout ───────────────────────────────────────────
 
-function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive }: LayoutProps) {
+function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive, canViewOthers, deadlineLabel }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -326,7 +393,7 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
                   </div>
                   <ChevronRight className={cn("w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0", isOpen && "rotate-90")} />
                 </button>
-                {isOpen && <MobileBreakdown player={p} poolId={poolId} />}
+                {isOpen && <MobileBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} />}
               </div>
             );
           })}
@@ -369,7 +436,7 @@ function PodiumSlot({ player, rank, height, avatarSize, showStar }: {
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive }: LayoutProps) {
+function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -470,7 +537,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                   </div>
                 </button>
 
-                {isOpen && <DesktopBreakdown player={p} poolId={poolId} />}
+                {isOpen && <DesktopBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} />}
               </div>
             );
           })}
