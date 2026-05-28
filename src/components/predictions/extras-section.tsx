@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Check, Search, Trophy, Award, Zap, Target, Shield, X } from "lucide-react";
+import { Check, Search, Trophy, Award, Zap, Target, Shield, X, Star, ShieldCheck } from "lucide-react";
 import { TeamFlag } from "@/components/team-flag";
 import { PLAYERS, type Player } from "@/data/players";
 
@@ -24,12 +24,14 @@ type ExtrasSectionProps = {
 const EXTRA_CARDS = [
   { kind: "TOP_SCORER", label: "Bota de Oro", points: 15, description: "Máximo goleador del Mundial", type: "player" as const, icon: Trophy },
   { kind: "BEST_PLAYER", label: "Mejor jugador", points: 10, description: "Balón de Oro del torneo", type: "player" as const, icon: Award },
+  { kind: "BEST_YOUNG_PLAYER", label: "Mejor jugador joven", points: 10, description: "Mejor jugador sub-21", type: "player" as const, icon: Star },
+  { kind: "BEST_GOALKEEPER", label: "Mejor portero", points: 10, description: "Guante de Oro del torneo", type: "player" as const, icon: ShieldCheck },
   { kind: "TOP_ASSISTER", label: "Máximo asistente", points: 15, description: "Más pases de gol del Mundial", type: "player" as const, icon: Zap },
   { kind: "MOST_GOALS_TEAM", label: "Equipo más goleador", points: 10, description: "Selección con más goles a favor", type: "team" as const, icon: Target },
   { kind: "MOST_CONCEDED_TEAM", label: "Equipo más goleado", points: 10, description: "Selección con más goles en contra", type: "team" as const, icon: Shield },
 ] as const;
 
-export const EXTRAS_TOTAL = 5;
+export const EXTRAS_TOTAL = 7;
 
 export function ExtrasSection({ poolId, extras, allTeams, disabled, onExtraChange, filledCount }: ExtrasSectionProps) {
   const isComplete = filledCount === EXTRAS_TOTAL;

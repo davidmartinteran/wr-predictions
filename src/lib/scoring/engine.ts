@@ -20,6 +20,12 @@ export type ScoringRules = {
   best_player: number;
   most_goals_team: number;
   most_conceded_team: number;
+  best_young_player: number;
+  best_goalkeeper: number;
+
+  podium_first: number;
+  podium_second: number;
+  podium_third: number;
 };
 
 export const DEFAULT_RULES: ScoringRules = {
@@ -42,6 +48,12 @@ export const DEFAULT_RULES: ScoringRules = {
   best_player: 10,
   most_goals_team: 10,
   most_conceded_team: 10,
+  best_young_player: 10,
+  best_goalkeeper: 10,
+
+  podium_first: 12,
+  podium_second: 6,
+  podium_third: 3,
 };
 
 // ── Match Scoring (Resultados) ─────────────────────────────────────
@@ -134,6 +146,8 @@ export function scoreElimination(
 export type ExtraKind =
   | "TOP_SCORER"
   | "BEST_PLAYER"
+  | "BEST_YOUNG_PLAYER"
+  | "BEST_GOALKEEPER"
   | "TOP_ASSISTER"
   | "MOST_GOALS_TEAM"
   | "MOST_CONCEDED_TEAM";
@@ -143,6 +157,8 @@ export type ExtraPrediction = { kind: ExtraKind; value: string };
 const EXTRA_RULES: Record<ExtraKind, keyof ScoringRules> = {
   TOP_SCORER: "top_scorer",
   BEST_PLAYER: "best_player",
+  BEST_YOUNG_PLAYER: "best_young_player",
+  BEST_GOALKEEPER: "best_goalkeeper",
   TOP_ASSISTER: "top_assister",
   MOST_GOALS_TEAM: "most_goals_team",
   MOST_CONCEDED_TEAM: "most_conceded_team",
@@ -158,18 +174,41 @@ export function scoreExtra(
   return rules[ruleKey] as number;
 }
 
+// ── Podium Scoring (bonus in Extras) ──────────────────────────────
+
+export type PodiumPosition = "first" | "second" | "third";
+
+const PODIUM_RULES: Record<PodiumPosition, keyof ScoringRules> = {
+  first: "podium_first",
+  second: "podium_second",
+  third: "podium_third",
+};
+
+export function scorePodium(
+  predictedTeam: string,
+  actualTeam: string,
+  position: PodiumPosition,
+  rules: ScoringRules
+): number {
+  if (predictedTeam.toLowerCase().trim() !== actualTeam.toLowerCase().trim()) return 0;
+  return rules[PODIUM_RULES[position]] as number;
+}
+
 // ── Total Calculation ──────────────────────────────────────────────
 
 type TotalInput = {
   matchResults: MatchScore[];
   eliminations: number[];
   extras: number[];
+  podium?: number[];
 };
 
 export function calculateTotal(input: TotalInput) {
   const results = input.matchResults.reduce((s, m) => s + m.points, 0);
   const classifications = input.eliminations.reduce((s, e) => s + e, 0);
-  const extras = input.extras.reduce((s, e) => s + e, 0);
+  const extraPicks = input.extras.reduce((s, e) => s + e, 0);
+  const podiumBonus = (input.podium ?? []).reduce((s, p) => s + p, 0);
+  const extras = extraPicks + podiumBonus;
   const exact_hits = input.matchResults.filter((m) => m.exact_hit).length;
 
   return {

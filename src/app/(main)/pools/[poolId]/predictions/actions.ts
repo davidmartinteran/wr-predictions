@@ -11,8 +11,8 @@ const predictionSchema = z.object({
 });
 
 const EXTRA_KINDS = [
-  "TOP_SCORER", "BEST_PLAYER", "TOP_ASSISTER",
-  "MOST_GOALS_TEAM", "MOST_CONCEDED_TEAM",
+  "TOP_SCORER", "BEST_PLAYER", "BEST_YOUNG_PLAYER", "BEST_GOALKEEPER",
+  "TOP_ASSISTER", "MOST_GOALS_TEAM", "MOST_CONCEDED_TEAM",
 ] as const;
 
 const extraSchema = z.object({

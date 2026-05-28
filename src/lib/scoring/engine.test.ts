@@ -3,6 +3,7 @@ import {
   scoreGroupMatch,
   scoreElimination,
   scoreExtra,
+  scorePodium,
   calculateTotal,
   DEFAULT_RULES,
   type ScoringRules,
@@ -10,6 +11,7 @@ import {
   type MatchResult,
   type ExtraPrediction,
   type EliminationRound,
+  type PodiumPosition,
 } from "./engine";
 
 const R = DEFAULT_RULES;
@@ -170,6 +172,14 @@ describe("scoreExtra", () => {
     expect(scoreExtra({ kind: "BEST_PLAYER", value: "Messi" }, "Messi", R)).toBe(10);
   });
 
+  it("best_young_player correct → 10 pts", () => {
+    expect(scoreExtra({ kind: "BEST_YOUNG_PLAYER", value: "Lamine Yamal" }, "Lamine Yamal", R)).toBe(10);
+  });
+
+  it("best_goalkeeper correct → 10 pts", () => {
+    expect(scoreExtra({ kind: "BEST_GOALKEEPER", value: "Unai Simón" }, "Unai Simón", R)).toBe(10);
+  });
+
   it("top_assister correct → 15 pts", () => {
     expect(scoreExtra({ kind: "TOP_ASSISTER", value: "Pedri" }, "Pedri", R)).toBe(15);
   });
@@ -188,6 +198,37 @@ describe("scoreExtra", () => {
 
   it("case insensitive with whitespace", () => {
     expect(scoreExtra({ kind: "TOP_SCORER", value: "  MBAPPÉ  " }, "mbappé", R)).toBe(15);
+  });
+});
+
+// ── scorePodium ───────────────────────────────────────────────────
+
+describe("scorePodium", () => {
+  it("exact champion → 12 pts", () => {
+    expect(scorePodium("ESP", "ESP", "first", R)).toBe(12);
+  });
+
+  it("exact runner-up → 6 pts", () => {
+    expect(scorePodium("BRA", "BRA", "second", R)).toBe(6);
+  });
+
+  it("exact third → 3 pts", () => {
+    expect(scorePodium("FRA", "FRA", "third", R)).toBe(3);
+  });
+
+  it("wrong prediction → 0 pts", () => {
+    expect(scorePodium("ESP", "BRA", "first", R)).toBe(0);
+  });
+
+  it("case insensitive", () => {
+    expect(scorePodium("esp", "ESP", "first", R)).toBe(12);
+  });
+
+  it("respects custom rules", () => {
+    const custom = { ...R, podium_first: 20, podium_second: 10, podium_third: 5 };
+    expect(scorePodium("ESP", "ESP", "first", custom)).toBe(20);
+    expect(scorePodium("BRA", "BRA", "second", custom)).toBe(10);
+    expect(scorePodium("FRA", "FRA", "third", custom)).toBe(5);
   });
 });
 
@@ -211,6 +252,20 @@ describe("calculateTotal", () => {
     expect(result.extras).toBe(25);
     expect(result.total).toBe(88);
     expect(result.exact_hits).toBe(2);
+  });
+
+  it("includes podium bonus in extras", () => {
+    const result = calculateTotal({
+      matchResults: [{ points: 3, exact_hit: true }],
+      eliminations: [5],
+      extras: [15],
+      podium: [12, 6, 0],
+    });
+
+    expect(result.results).toBe(3);
+    expect(result.classifications).toBe(5);
+    expect(result.extras).toBe(33);
+    expect(result.total).toBe(41);
   });
 
   it("handles empty inputs", () => {

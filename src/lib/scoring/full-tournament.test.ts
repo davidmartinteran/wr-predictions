@@ -3,6 +3,7 @@ import {
   scoreGroupMatch,
   scoreElimination,
   scoreExtra,
+  scorePodium,
   calculateTotal,
   DEFAULT_RULES,
   ROUND_ORDER,
@@ -11,6 +12,7 @@ import {
   type MatchScore,
   type ExtraPrediction,
   type EliminationRound,
+  type PodiumPosition,
 } from "./engine";
 
 const R = DEFAULT_RULES;
@@ -143,9 +145,18 @@ ACTUAL_ELIM["ARG"] = "RUNNER_UP";
 const EXTRAS_ACTUAL: Record<string, string> = {
   TOP_SCORER: "Mbappé",
   BEST_PLAYER: "Lamine Yamal",
+  BEST_YOUNG_PLAYER: "Lamine Yamal",
+  BEST_GOALKEEPER: "Unai Simón",
   TOP_ASSISTER: "Pedri",
   MOST_GOALS_TEAM: "España",
   MOST_CONCEDED_TEAM: "Qatar",
+};
+
+// Podium results (derived from bracket)
+const ACTUAL_PODIUM: Record<PodiumPosition, string> = {
+  first: "ESP",
+  second: "ARG",
+  third: "BRA",
 };
 
 // Spain match IDs
@@ -207,10 +218,13 @@ type PlayerResult = ReturnType<typeof calculateTotal> & {
   extraDetails: { kind: string; predicted: string; actual: string; points: number }[];
 };
 
+type PodiumPrediction = Record<PodiumPosition, string>;
+
 function scorePlayer(
   matchPreds: Record<string, MatchPrediction>,
   predictedElim: Record<string, EliminationRound>,
   extraPreds: ExtraPrediction[],
+  podiumPreds?: PodiumPrediction,
 ): PlayerResult {
   // 1. Match results
   const matchDetails = allMatches.map((m) => {
@@ -237,10 +251,18 @@ function scorePlayer(
   });
   const extraScores = extraDetails.map((d) => d.points);
 
+  // 4. Podium bonus
+  const podiumScores = podiumPreds
+    ? (["first", "second", "third"] as PodiumPosition[]).map((pos) =>
+        scorePodium(podiumPreds[pos], ACTUAL_PODIUM[pos], pos, R)
+      )
+    : [];
+
   const totals = calculateTotal({
     matchResults: matchDetails,
     eliminations: elimScores,
     extras: extraScores,
+    podium: podiumScores,
   });
 
   return { ...totals, matchDetails, elimDetails, extraDetails };
@@ -271,12 +293,16 @@ function buildOracle() {
   const extras: ExtraPrediction[] = [
     { kind: "TOP_SCORER", value: "Mbappé" },
     { kind: "BEST_PLAYER", value: "Lamine Yamal" },
+    { kind: "BEST_YOUNG_PLAYER", value: "Lamine Yamal" },
+    { kind: "BEST_GOALKEEPER", value: "Unai Simón" },
     { kind: "TOP_ASSISTER", value: "Pedri" },
     { kind: "MOST_GOALS_TEAM", value: "España" },
     { kind: "MOST_CONCEDED_TEAM", value: "Qatar" },
   ];
 
-  return { matchPreds, predictedElim, extras };
+  const podium: PodiumPrediction = { first: "ESP", second: "ARG", third: "BRA" };
+
+  return { matchPreds, predictedElim, extras, podium };
 }
 
 // ── Player 2: "El Buen Ojo" — decent, ~60% signs, some knockouts ──
@@ -324,14 +350,18 @@ function buildDecentPlayer() {
   }
 
   const extras: ExtraPrediction[] = [
-    { kind: "TOP_SCORER", value: "Kane" },           // wrong
-    { kind: "BEST_PLAYER", value: "Lamine Yamal" },  // correct
-    { kind: "TOP_ASSISTER", value: "Pedri" },         // correct
-    { kind: "MOST_GOALS_TEAM", value: "Francia" },    // wrong
-    { kind: "MOST_CONCEDED_TEAM", value: "Qatar" },   // correct
+    { kind: "TOP_SCORER", value: "Kane" },              // wrong
+    { kind: "BEST_PLAYER", value: "Lamine Yamal" },     // correct  10
+    { kind: "BEST_YOUNG_PLAYER", value: "Pedri" },      // wrong
+    { kind: "BEST_GOALKEEPER", value: "Unai Simón" },   // correct  10
+    { kind: "TOP_ASSISTER", value: "Pedri" },            // correct  15
+    { kind: "MOST_GOALS_TEAM", value: "Francia" },       // wrong
+    { kind: "MOST_CONCEDED_TEAM", value: "Qatar" },      // correct  10
   ];
 
-  return { matchPreds, predictedElim, extras };
+  const podium: PodiumPrediction = { first: "ESP", second: "BRA", third: "ENG" };
+
+  return { matchPreds, predictedElim, extras, podium };
 }
 
 // ── Player 3: "El Bote" — nearly everything wrong ──────────────────
@@ -362,12 +392,16 @@ function buildBotePlayer() {
   const extras: ExtraPrediction[] = [
     { kind: "TOP_SCORER", value: "Rashford" },
     { kind: "BEST_PLAYER", value: "Rashford" },
+    { kind: "BEST_YOUNG_PLAYER", value: "Rashford" },
+    { kind: "BEST_GOALKEEPER", value: "Rashford" },
     { kind: "TOP_ASSISTER", value: "Rashford" },
     { kind: "MOST_GOALS_TEAM", value: "Canada" },
     { kind: "MOST_CONCEDED_TEAM", value: "España" },
   ];
 
-  return { matchPreds, predictedElim, extras };
+  const podium: PodiumPrediction = { first: "FRA", second: "GER", third: "ITA" };
+
+  return { matchPreds, predictedElim, extras, podium };
 }
 
 // ── Tests ──────────────────────────────────────────────────────────
@@ -404,8 +438,8 @@ describe("Full tournament simulation", () => {
   });
 
   describe("El Oráculo — perfect predictions", () => {
-    const { matchPreds, predictedElim, extras } = buildOracle();
-    const result = scorePlayer(matchPreds, predictedElim, extras);
+    const { matchPreds, predictedElim, extras, podium } = buildOracle();
+    const result = scorePlayer(matchPreds, predictedElim, extras, podium);
 
     it("72 exact hits", () => {
       expect(result.exact_hits).toBe(72);
@@ -445,8 +479,8 @@ describe("Full tournament simulation", () => {
       expect(result.classifications).toBe(expected);
     });
 
-    it("extras: 15+10+15+10+10 = 60", () => {
-      expect(result.extras).toBe(60);
+    it("extras: (15+10+10+10+15+10+10) picks + (12+6+3) podium = 101", () => {
+      expect(result.extras).toBe(101);
     });
 
     it("total = results + classifications + extras", () => {
@@ -460,8 +494,8 @@ describe("Full tournament simulation", () => {
   });
 
   describe("El Buen Ojo — decent predictions", () => {
-    const { matchPreds, predictedElim, extras } = buildDecentPlayer();
-    const result = scorePlayer(matchPreds, predictedElim, extras);
+    const { matchPreds, predictedElim, extras, podium } = buildDecentPlayer();
+    const result = scorePlayer(matchPreds, predictedElim, extras, podium);
 
     it("some but not all exact hits", () => {
       expect(result.exact_hits).toBeGreaterThan(0);
@@ -477,9 +511,9 @@ describe("Full tournament simulation", () => {
       expect(result.classifications).toBeGreaterThan(0);
     });
 
-    it("extras: 3 correct (10+15+10) = 35", () => {
-      expect(result.extras).toBe(10 + 15 + 10);
-      expect(result.extras).toBe(35);
+    it("extras: 4 correct picks (10+10+15+10) + champion podium (12) = 57", () => {
+      expect(result.extras).toBe(10 + 10 + 15 + 10 + 12);
+      expect(result.extras).toBe(57);
     });
 
     it("total is between Bote and Oracle", () => {
@@ -495,8 +529,8 @@ describe("Full tournament simulation", () => {
   });
 
   describe("El Bote — almost everything wrong", () => {
-    const { matchPreds, predictedElim, extras } = buildBotePlayer();
-    const result = scorePlayer(matchPreds, predictedElim, extras);
+    const { matchPreds, predictedElim, extras, podium } = buildBotePlayer();
+    const result = scorePlayer(matchPreds, predictedElim, extras, podium);
 
     it("0 exact hits", () => {
       expect(result.exact_hits).toBe(0);
@@ -595,12 +629,13 @@ describe("Full tournament simulation", () => {
     });
 
     it("max theoretical scores match the design", () => {
-      const oracle = scorePlayer(...Object.values(buildOracle()) as [any, any, any]);
+      const { matchPreds, predictedElim, extras, podium } = buildOracle();
+      const oracle = scorePlayer(matchPreds, predictedElim, extras, podium);
       // Results max: 225
       expect(oracle.results).toBe(225);
-      // Extras max: 60
-      expect(oracle.extras).toBe(60);
-      // Total should be around 530 (225 + ~245 + 60)
+      // Extras max: 80 picks + 21 podium = 101
+      expect(oracle.extras).toBe(101);
+      // Total should be around 568 (225 + ~242 + 101)
       expect(oracle.total).toBeGreaterThan(500);
       expect(oracle.total).toBeLessThan(600);
     });
@@ -619,7 +654,7 @@ describe("Full tournament simulation", () => {
       scoreboard.push("╠══════════════════════════════════════════════╣");
 
       for (const p of players) {
-        const result = scorePlayer(p.matchPreds, p.predictedElim, p.extras);
+        const result = scorePlayer(p.matchPreds, p.predictedElim, p.extras, p.podium);
         scoreboard.push(`║ ${p.name.padEnd(16)} │ TOTAL: ${String(result.total).padStart(4)} pts  ║`);
         scoreboard.push(`║${"".padEnd(18)}│ Resultados: ${String(result.results).padStart(4)}    ║`);
         scoreboard.push(`║${"".padEnd(18)}│ Clasificac: ${String(result.classifications).padStart(4)}    ║`);
