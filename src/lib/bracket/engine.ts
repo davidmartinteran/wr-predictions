@@ -4,6 +4,7 @@ import {
   STAGE_MATCH_COUNTS,
   getParentSlots,
   getChildSlot,
+  assignThirdsToSlots,
   type Stage,
 } from "./mapping";
 import { computeStandings, type TeamInfo, type StandingRow, type GroupStandings } from "./standings";
@@ -181,8 +182,14 @@ export function buildBracketState(
     resolvedStandings[g] = rows;
   }
 
-  // Rank the resolved thirds (0-indexed)
-  const thirdsRanked = resolvedThirds.map((t) => teamInfoFromRow(t));
+  // Resolve which third-placed team goes to which R32 slot
+  const qualifyingGroups = resolvedThirds.map((t) => t.group);
+  const thirdAssignment = assignThirdsToSlots(qualifyingGroups);
+
+  const thirdsByGroup: Record<string, TeamInfo> = {};
+  for (const t of resolvedThirds) {
+    thirdsByGroup[t.group] = teamInfoFromRow(t);
+  }
 
   // Build R32 matchups
   for (const matchup of R32_MATCHUPS) {
@@ -193,16 +200,15 @@ export function buildBracketState(
       const rows = resolvedStandings[matchup.home.group];
       const idx = matchup.home.rank - 1;
       if (rows && rows[idx]) homeTeam = teamInfoFromRow(rows[idx]);
-    } else {
-      homeTeam = thirdsRanked[matchup.home.thirdSlot] ?? null;
     }
 
     if (matchup.away.type === "position") {
       const rows = resolvedStandings[matchup.away.group];
       const idx = matchup.away.rank - 1;
       if (rows && rows[idx]) awayTeam = teamInfoFromRow(rows[idx]);
-    } else {
-      awayTeam = thirdsRanked[matchup.away.thirdSlot] ?? null;
+    } else if (matchup.away.type === "third" && thirdAssignment) {
+      const assignedGroup = thirdAssignment[matchup.slot];
+      if (assignedGroup) awayTeam = thirdsByGroup[assignedGroup] ?? null;
     }
 
     const pickKey = `R32:${matchup.slot}`;
