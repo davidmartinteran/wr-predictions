@@ -52,6 +52,12 @@ export async function createPool(input: z.infer<typeof createPoolSchema>) {
   return { success: true, id: pool.id, invite_code: pool.invite_code };
 }
 
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
 export async function joinPool(input: z.infer<typeof joinPoolSchema>) {
   const parsed = joinPoolSchema.safeParse(input);
   if (!parsed.success) {

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition, useEffect, useCallback } from "react";
+import { useState, useTransition, useEffect, useCallback, useRef } from "react";
 import { Trophy, Mail, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { sendMagicLink } from "./actions";
+import { createClient } from "@/lib/supabase/client";
+import { sendOtp } from "./actions";
 
 type InvitePool = { name: string; participant_count: number };
 
@@ -52,11 +54,14 @@ function Header({ invitePool }: { invitePool?: InvitePool | null }) {
 }
 
 export function LoginForm({ next, invitePool }: Props) {
-  const [sent, setSent] = useState(false);
+  const router = useRouter();
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [countdown, setCountdown] = useState(0);
+  const otpRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -64,16 +69,20 @@ export function LoginForm({ next, invitePool }: Props) {
     return () => clearTimeout(t);
   }, [countdown]);
 
-  const handleSubmit = useCallback(
+  useEffect(() => {
+    if (step === "otp") otpRef.current?.focus();
+  }, [step]);
+
+  const handleSendOtp = useCallback(
     (formData: FormData) => {
       setError(null);
       startTransition(async () => {
-        const result = await sendMagicLink(formData);
+        const result = await sendOtp(formData);
         if (result.error) {
           setError(result.error);
         } else {
           setEmail(result.email!);
-          setSent(true);
+          setStep("otp");
           setCountdown(60);
         }
       });
@@ -81,22 +90,42 @@ export function LoginForm({ next, invitePool }: Props) {
     []
   );
 
+  const handleVerifyOtp = useCallback(() => {
+    if (otp.length !== 6) return;
+    setError(null);
+    startTransition(async () => {
+      const supabase = createClient();
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: "email",
+      });
+      if (verifyError) {
+        setError("Código incorrecto o expirado. Inténtalo de nuevo.");
+        setOtp("");
+      } else {
+        router.push(next ?? "/");
+        router.refresh();
+      }
+    });
+  }, [email, otp, next, router]);
+
   const handleResend = useCallback(() => {
     const fd = new FormData();
     fd.set("email", email);
-    if (next) fd.set("next", next);
     setError(null);
     startTransition(async () => {
-      const result = await sendMagicLink(fd);
+      const result = await sendOtp(fd);
       if (result.error) {
         setError(result.error);
       } else {
         setCountdown(60);
+        setOtp("");
       }
     });
-  }, [email, next]);
+  }, [email]);
 
-  if (sent) {
+  if (step === "otp") {
     return (
       <div className="flex flex-col items-center text-center gap-6">
         <Header invitePool={invitePool} />
@@ -106,34 +135,39 @@ export function LoginForm({ next, invitePool }: Props) {
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold">
-            Revisa tu bandeja de entrada
-          </h2>
+          <h2 className="text-lg font-semibold">Introduce el código</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Hemos enviado un enlace a
+            Hemos enviado un código de 6 dígitos a
           </p>
           <p className="mt-0.5 text-sm font-medium">{email}</p>
         </div>
 
-        <div className="w-full rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4 text-left">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Siguiente paso
-          </p>
-          <ol className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex gap-2">
-              <span className="text-muted-foreground/60">1.</span>
-              Abre el correo de Porra Mundial
-            </li>
-            <li className="flex gap-2">
-              <span className="text-muted-foreground/60">2.</span>
-              Toca &quot;Entrar a la porra&quot;
-            </li>
-            <li className="flex gap-2">
-              <span className="text-muted-foreground/60">3.</span>
-              Vuelves aquí, ya dentro
-            </li>
-          </ol>
+        <div className="w-full space-y-4">
+          <Input
+            ref={otpRef}
+            type="tel"
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="000000"
+            value={otp}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+              setOtp(v);
+            }}
+            className="h-14 text-center text-2xl font-mono font-bold tracking-[0.3em] bg-zinc-900/40 border-zinc-800/80"
+            autoComplete="one-time-code"
+          />
+
+          <Button
+            onClick={handleVerifyOtp}
+            disabled={otp.length !== 6 || isPending}
+            className="w-full h-11 md:h-[52px] text-base font-medium"
+          >
+            {isPending ? "Verificando..." : "Entrar"}
+          </Button>
         </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="flex flex-col items-center gap-2 text-sm">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -143,7 +177,7 @@ export function LoginForm({ next, invitePool }: Props) {
               disabled={countdown > 0 || isPending}
               className="font-medium underline underline-offset-2 text-foreground disabled:text-muted-foreground disabled:no-underline"
             >
-              Reenviar enlace
+              Reenviar código
             </button>
             {countdown > 0 && (
               <span className="text-muted-foreground/60">· {countdown}s</span>
@@ -151,8 +185,9 @@ export function LoginForm({ next, invitePool }: Props) {
           </div>
           <button
             onClick={() => {
-              setSent(false);
+              setStep("email");
               setEmail("");
+              setOtp("");
               setError(null);
             }}
             className="text-muted-foreground hover:text-foreground transition-colors"
@@ -160,10 +195,6 @@ export function LoginForm({ next, invitePool }: Props) {
             Usar otro email
           </button>
         </div>
-
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
       </div>
     );
   }
@@ -172,7 +203,7 @@ export function LoginForm({ next, invitePool }: Props) {
     <div className="flex flex-col items-center text-center gap-8">
       <Header invitePool={invitePool} />
 
-      <form action={handleSubmit} className="w-full space-y-4">
+      <form action={handleSendOtp} className="w-full space-y-4">
         {next && <input type="hidden" name="next" value={next} />}
         <div className="text-left">
           <label
@@ -197,15 +228,13 @@ export function LoginForm({ next, invitePool }: Props) {
           disabled={isPending}
           className="w-full h-11 md:h-[52px] text-base font-medium"
         >
-          {isPending ? "Enviando..." : "Enviar Magic Link"}
+          {isPending ? "Enviando..." : "Enviar código"}
         </Button>
 
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
         <p className="text-sm text-muted-foreground">
-          Te enviaremos un enlace para entrar, sin contraseña.
+          Te enviaremos un código de 6 dígitos para entrar, sin contraseña.
         </p>
       </form>
     </div>

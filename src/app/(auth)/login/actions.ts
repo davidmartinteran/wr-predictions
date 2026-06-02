@@ -5,7 +5,7 @@ import { z } from "zod";
 
 const emailSchema = z.email("Email no válido");
 
-export async function sendMagicLink(formData: FormData) {
+export async function sendOtp(formData: FormData) {
   const raw = formData.get("email");
   const next = formData.get("next");
   const parsed = emailSchema.safeParse(raw);
@@ -23,12 +23,13 @@ export async function sendMagicLink(formData: FormData) {
   const { error } = await supabase.auth.signInWithOtp({
     email: parsed.data,
     options: {
+      shouldCreateUser: true,
       emailRedirectTo: callbackUrl.toString(),
     },
   });
 
   if (error) {
-    return { error: "No se pudo enviar el enlace. Inténtalo de nuevo." };
+    return { error: "No se pudo enviar el código. Inténtalo de nuevo." };
   }
 
   return { success: true, email: parsed.data };

@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { CodeForm } from "@/app/(main)/welcome/code-form";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { PoolsBottomNav } from "./pools-bottom-nav";
+import { SignOutButton } from "./sign-out-button";
 
 export default async function PoolsListPage() {
   const supabase = await createClient();
@@ -191,6 +192,9 @@ export default async function PoolsListPage() {
               </div>
             </>
           )}
+          <div className="mt-12 mb-4">
+            <SignOutButton />
+          </div>
         </div>
       </main>
 
