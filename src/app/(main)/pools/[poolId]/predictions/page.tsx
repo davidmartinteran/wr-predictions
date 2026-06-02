@@ -28,6 +28,15 @@ export default async function PredictionsPage({
 
   if (!pool) notFound();
 
+  const { data: participation } = await supabase
+    .from("participations")
+    .select("is_admin")
+    .eq("user_id", user.id)
+    .eq("pool_id", poolId)
+    .maybeSingle();
+
+  const isAdmin = participation?.is_admin ?? false;
+
   const isPastDeadline = new Date(pool.deadline) < new Date();
   const viewingOther = !!targetUserId && targetUserId !== user.id && isPastDeadline;
   const viewMode: ViewMode = viewingOther
@@ -78,6 +87,15 @@ export default async function PredictionsPage({
     .select("id, name, code, flag_emoji")
     .eq("tournament_id", pool.tournament_id)
     .order("name");
+
+  let adminResults: { kind: string; value: string }[] = [];
+  if (isAdmin) {
+    const { data: results } = await supabase
+      .from("pool_results_extra")
+      .select("kind, value")
+      .eq("pool_id", poolId);
+    adminResults = (results ?? []).map((r) => ({ kind: r.kind, value: r.value }));
+  }
 
   // When viewing another player, also fetch current user's predictions for comparison
   let ownPredictions: { match_id: string; home_score: number; away_score: number }[] | null = null;
@@ -153,6 +171,8 @@ export default async function PredictionsPage({
         group_letter: r.group_letter,
         ordered_team_ids: r.ordered_team_ids,
       }))}
+      isAdmin={isAdmin}
+      adminResults={adminResults}
     />
   );
 }

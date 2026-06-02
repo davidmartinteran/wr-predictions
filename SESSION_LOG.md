@@ -43,13 +43,14 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 
 | Feature | Ficheros clave | Estado |
 |---|---|---|
-| Auth Magic Link | `src/app/(auth)/login/` (page, form, actions) | Funcional + login contextual con invite |
+| Auth OTP + Magic Link | `src/app/(auth)/login/` (page, form, actions) | ✅ — OTP 6 dígitos + magic link fallback, Brevo SMTP, email con branding |
 | Dev login | `src/app/dev/login/route.ts` | Funcional (no consume magic links, bloqueado en prod) |
 | Layout principal | `src/app/(main)/layout.tsx`, TopBar, BottomNav | Funcional (datos hardcoded en TopBar) |
 | Multi-porra routing | `src/app/(main)/pools/[poolId]/` | Funcional — pools list, create, join, invite codes |
 | Predicciones grupos | `src/app/(main)/pools/[poolId]/predictions/` | ✅ Completa — 3 secciones, responsive, auto-save |
 | Bracket eliminatorias | `src/lib/bracket/` + `src/components/bracket/` | ✅ Completa — engine + UI mobile/desktop |
-| Extras/Bonus | `src/components/predictions/extras-section.tsx` | ✅ Completa — 5 categorías, player autocomplete |
+| Extras/Bonus | `src/components/predictions/extras-section.tsx` | ✅ Completa — 7 categorías, player autocomplete |
+| Admin resultados extras | `src/components/predictions/admin-extras-section.tsx` | ✅ — pestaña Admin en predicciones, solo para admins del pool |
 | Bracket engine | `src/lib/bracket/engine.ts`, `standings.ts`, `mapping.ts` | ✅ — standings, tiebreaks, R32→Final (FIFA oficial), cascade |
 | Group tiebreak modal | `src/components/bracket/group-tiebreak-modal.tsx` | ✅ — drag reorder para empates de grupo |
 | Thirds tiebreaker | `src/components/bracket/thirds-tiebreaker.tsx` | ✅ — selección de 3ros clasificados |
@@ -63,6 +64,7 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 | Join flow | `src/app/join/[code]/` | ✅ — landing pública, redirige a login si no auth |
 | Player data | `src/data/players.ts` | ~250 jugadores, datos actualizados para autocomplete |
 | PWA | `public/manifest.json`, `public/sw.js`, `src/components/sw-register.tsx` | ✅ — instalable, iconos placeholder |
+| Cerrar sesión | `src/app/(main)/pools/sign-out-button.tsx` | ✅ — botón en Mis Porras |
 
 ### Componentes UI existentes
 
@@ -96,13 +98,8 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 
 ### Alta prioridad (MVP — antes del 11 jun)
 
-- [ ] **Auth: SMTP propio + redirect URL producción** — bloqueante para compartir con amigos
-  - ✅ `getBaseUrl()` actualizado para usar `NEXT_PUBLIC_SITE_URL` como primera opción
-  - **Pasos manuales pendientes:**
-    1. **SMTP (Brevo):** Crear cuenta en brevo.com → Settings → SMTP & API → copiar credenciales. En Supabase Dashboard → Project Settings → Auth → SMTP Settings → "Enable Custom SMTP" → meter datos de Brevo. Nota: free tier 300 emails/día, añade logo Brevo al pie
-    2. **Redirect URL:** Supabase Dashboard → Auth → URL Configuration → Site URL: `https://wr-predictions.vercel.app`. Añadir en Redirect URLs: `https://wr-predictions.vercel.app/**`
-    3. **Env var:** Vercel → Settings → Environment Variables → `NEXT_PUBLIC_SITE_URL=https://wr-predictions.vercel.app`
-    4. **Email template:** Supabase Dashboard → Auth → Email Templates → Magic Link. Pegar HTML con branding "Porra Mundial 2026" (preparar template con Claude antes de pegar)
+- [x] **Auth: SMTP + OTP + redirect URL producción** — ✅ Brevo SMTP + OTP flow (código 6 dígitos + magic link fallback) + email template con branding + `NEXT_PUBLIC_SITE_URL` en Vercel + cerrar sesión en Mis Porras
+- [x] **Admin: resultados extras** — ✅ Tabla `pool_results_extra` + pestaña "Admin" en predicciones (solo visible para admins) + server actions + UI con autocomplete jugadores y selector equipos
 - [ ] **Migración predictions_group_tiebreak** — tabla usada en código pero sin migración formal
 - [ ] **Migración scores CHECK constraint** — actualizar categorías a RESULTS/CLASSIFICATIONS/EXTRAS
 - [ ] **Migración predictions_extra kind constraint** — actualizar a 5 kinds
@@ -113,7 +110,6 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 ### Media prioridad
 
 - [ ] Resultados automáticos — integración con OpenFootball (GitHub JSON) para scores. Polling cada 30 min via Edge Function cron en días de partido. Sin API key, sin rate limits.
-- [ ] Admin override — UI mínima para corregir datos o meter "mejor jugador" (dato manual al final del torneo)
 - [ ] TopBar — datos dinámicos (nombre pool, nº jugadores, user)
 - [ ] Leaderboard: pulir estilos finales, verificar con datos reales
 - [ ] Actualizar `src/data/players.ts` con convocatorias oficiales cuando se publiquen (~primera semana junio)

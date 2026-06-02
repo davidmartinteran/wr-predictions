@@ -202,6 +202,53 @@ export async function saveGroupTiebreak(data: z.infer<typeof tiebreakSchema>) {
   return { success: true };
 }
 
+// ── Admin: actual results for extras ────────────────────────────
+
+const adminExtraSchema = z.object({
+  pool_id: z.string().uuid(),
+  kind: z.enum(EXTRA_KINDS),
+  value: z.string().min(1).max(200),
+});
+
+export async function saveAdminExtra(data: z.infer<typeof adminExtraSchema>) {
+  const parsed = adminExtraSchema.safeParse(data);
+  if (!parsed.success) return { error: "Datos no válidos" };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  const { error } = await supabase
+    .from("pool_results_extra")
+    .upsert(
+      {
+        pool_id: parsed.data.pool_id,
+        kind: parsed.data.kind,
+        value: parsed.data.value,
+        updated_at: new Date().toISOString(),
+        updated_by: user.id,
+      },
+      { onConflict: "pool_id,kind" }
+    );
+
+  if (error) return { error: "No se pudo guardar. ¿Eres admin de esta porra?" };
+  return { success: true };
+}
+
+export async function deleteAdminExtra(data: { pool_id: string; kind: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  await supabase
+    .from("pool_results_extra")
+    .delete()
+    .eq("pool_id", data.pool_id)
+    .eq("kind", data.kind);
+
+  return { success: true };
+}
+
 export async function deleteGroupTiebreak(data: { pool_id: string; group_letter: string }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

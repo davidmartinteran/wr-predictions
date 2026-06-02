@@ -174,6 +174,38 @@ export type Database = {
           },
         ]
       }
+      pool_results_extra: {
+        Row: {
+          kind: string
+          pool_id: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          kind: string
+          pool_id: string
+          updated_at?: string
+          updated_by?: string | null
+          value: string
+        }
+        Update: {
+          kind?: string
+          pool_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_results_extra_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pools: {
         Row: {
           created_at: string | null

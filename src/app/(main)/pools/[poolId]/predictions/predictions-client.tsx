@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useCallback, useRef, useTransition, useMemo, useEffect } from "react";
-import { Lock, Check, LayoutGrid, GitBranch, Star, ChevronLeft, ChevronRight, Eye, Snowflake } from "lucide-react";
+import { Lock, Check, LayoutGrid, GitBranch, Star, ChevronLeft, ChevronRight, Eye, Snowflake, Settings } from "lucide-react";
 import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
 import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
-import { savePrediction, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak } from "./actions";
+import { savePrediction, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak, saveAdminExtra, deleteAdminExtra } from "./actions";
 import { ExtrasSection, EXTRAS_TOTAL } from "@/components/predictions/extras-section";
+import { AdminExtrasSection, ADMIN_EXTRAS_TOTAL } from "@/components/predictions/admin-extras-section";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
 import { computeStandings } from "@/lib/bracket/standings";
@@ -19,7 +20,7 @@ import { BracketDesktopView } from "@/components/bracket/bracket-desktop";
 import { ThirdsTiebreaker } from "@/components/bracket/thirds-tiebreaker";
 import { GroupTiebreakModal } from "@/components/bracket/group-tiebreak-modal";
 
-type Section = "groups" | "bracket" | "extras";
+type Section = "groups" | "bracket" | "extras" | "admin";
 
 type Team = {
   id: string;
@@ -78,6 +79,8 @@ type Props = {
   poolParticipants?: PoolParticipant[] | null;
   targetUserId?: string;
   savedTiebreaks: SavedTiebreak[];
+  isAdmin?: boolean;
+  adminResults?: { kind: string; value: string }[];
 };
 
 const VIEW_COLORS: Record<ViewMode, string> = {
@@ -95,7 +98,7 @@ function getMatchday(matchNumber: number): number {
 }
 
 
-export function PredictionsClient({ poolId, matches, predictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks }: Props) {
+export function PredictionsClient({ poolId, matches, predictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks, isAdmin, adminResults }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
   const [scores, setScores] = useState<Record<string, { home: number | null; away: number | null }>>(() => {
@@ -126,12 +129,20 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     }
     return initial;
   });
+  const [adminExtras, setAdminExtras] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const r of adminResults ?? []) {
+      initial[r.kind] = r.value;
+    }
+    return initial;
+  });
   const [selectedThirds, setSelectedThirds] = useState<string[]>([]);
   const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(null);
   const [, startTransition] = useTransition();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const extraTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const knockoutTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const adminTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const groupMatches = matches
     .filter((m) => m.group_letter === activeGroup)
@@ -240,14 +251,40 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
   );
 
   const extrasFilledCount = useMemo(() => {
-    let count = 0;
-    if (extras.TOP_SCORER) count++;
-    if (extras.BEST_PLAYER) count++;
-    if (extras.TOP_ASSISTER) count++;
-    if (extras.MOST_GOALS_TEAM) count++;
-    if (extras.MOST_CONCEDED_TEAM) count++;
-    return count;
+    return Object.keys(extras).length;
   }, [extras]);
+
+  const handleAdminExtraChange = useCallback(
+    (kind: string, value: string | null) => {
+      if (value) {
+        setAdminExtras((prev) => ({ ...prev, [kind]: value }));
+      } else {
+        setAdminExtras((prev) => {
+          const next = { ...prev };
+          delete next[kind];
+          return next;
+        });
+      }
+
+      if (adminTimers.current[kind]) {
+        clearTimeout(adminTimers.current[kind]);
+      }
+      adminTimers.current[kind] = setTimeout(() => {
+        startTransition(async () => {
+          if (value) {
+            await saveAdminExtra({ pool_id: poolId, kind: kind as "TOP_SCORER", value });
+          } else {
+            await deleteAdminExtra({ pool_id: poolId, kind });
+          }
+        });
+      }, 500);
+    },
+    [poolId]
+  );
+
+  const adminFilledCount = useMemo(() => {
+    return Object.keys(adminExtras).length;
+  }, [adminExtras]);
 
   const allGroupsComplete = completedCount === totalMatches;
 
@@ -421,7 +458,8 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     groups: { filled: completedCount, total: totalMatches },
     bracket: { filled: bracketState?.filledCount ?? 0, total: TOTAL_BRACKET_PICKS },
     extras: { filled: extrasFilledCount, total: EXTRAS_TOTAL },
-  }), [completedCount, totalMatches, extrasFilledCount, bracketState]);
+    admin: { filled: adminFilledCount, total: ADMIN_EXTRAS_TOTAL },
+  }), [completedCount, totalMatches, extrasFilledCount, bracketState, adminFilledCount]);
 
   const ownScores = useMemo(() => {
     if (!ownPredictions) return null;
@@ -474,6 +512,10 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     targetDisplayName,
     poolParticipants,
     targetUserId,
+    isAdmin,
+    adminExtras,
+    handleAdminExtraChange,
+    adminFilledCount,
   };
 
   return (
@@ -494,6 +536,7 @@ type SectionCounts = {
   groups: { filled: number; total: number };
   bracket: { filled: number; total: number };
   extras: { filled: number; total: number };
+  admin: { filled: number; total: number };
 };
 
 type LayoutProps = {
@@ -538,6 +581,10 @@ type LayoutProps = {
   targetDisplayName?: string | null;
   poolParticipants?: PoolParticipant[] | null;
   targetUserId?: string;
+  isAdmin?: boolean;
+  adminExtras: Record<string, string>;
+  handleAdminExtraChange: (kind: string, value: string | null) => void;
+  adminFilledCount: number;
 };
 
 function MobileLayout(props: LayoutProps) {
@@ -551,6 +598,7 @@ function MobileLayout(props: LayoutProps) {
     selectedThirds, handleKnockoutPick, handleThirdToggle, tiebreakModal,
     setTiebreakModal, setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
     targetDisplayName, poolParticipants, targetUserId,
+    isAdmin, adminExtras, handleAdminExtraChange, adminFilledCount,
   } = props;
 
   const accentColor = VIEW_COLORS[viewMode];
@@ -601,7 +649,7 @@ function MobileLayout(props: LayoutProps) {
         </div>
 
         {/* Section tabs */}
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className={`grid gap-1.5 ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
           <MobileSectionPill
             active={activeSection === "groups"}
             icon={<LayoutGrid className="w-3.5 h-3.5" />}
@@ -627,6 +675,16 @@ function MobileLayout(props: LayoutProps) {
             color={viewMode === "own-open" ? "#F59E0B" : accentColor}
             onClick={() => setActiveSection("extras")}
           />
+          {isAdmin && (
+            <MobileSectionPill
+              active={activeSection === "admin"}
+              icon={<Settings className="w-3.5 h-3.5" />}
+              label="Admin"
+              count={`${sectionCounts.admin.filled}/${sectionCounts.admin.total}`}
+              color="#f43f5e"
+              onClick={() => setActiveSection("admin")}
+            />
+          )}
         </div>
       </div>
 
@@ -765,6 +823,17 @@ function MobileLayout(props: LayoutProps) {
             disabled={disabled}
             onExtraChange={handleExtraChange}
             filledCount={extrasFilledCount}
+          />
+        </div>
+      )}
+      {activeSection === "admin" && isAdmin && (
+        <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
+          <AdminExtrasSection
+            poolId={poolId}
+            results={adminExtras}
+            allTeams={allTeams}
+            onResultChange={handleAdminExtraChange}
+            filledCount={adminFilledCount}
           />
         </div>
       )}
@@ -914,6 +983,7 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
     handleKnockoutPick, handleThirdToggle, tiebreakModal, setTiebreakModal,
     setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
     targetDisplayName, poolParticipants, targetUserId,
+    isAdmin, adminExtras, handleAdminExtraChange, adminFilledCount,
   } = props;
   const accentColor = VIEW_COLORS[viewMode];
   const activeGroupTeams = useMemo(() => {
@@ -1064,6 +1134,17 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
             color={viewMode === "own-open" ? "#F59E0B" : accentColor}
             onClick={() => setActiveSection("extras")}
           />
+          {isAdmin && (
+            <DesktopSectionItem
+              active={activeSection === "admin"}
+              icon={<Settings className="w-4 h-4" />}
+              label="Admin"
+              filled={sectionCounts.admin.filled}
+              total={sectionCounts.admin.total}
+              color="#f43f5e"
+              onClick={() => setActiveSection("admin")}
+            />
+          )}
         </div>
 
         {/* Group list (only when groups section active) */}
@@ -1290,6 +1371,16 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
             filledCount={extrasFilledCount}
           />
         )}
+
+        {activeSection === "admin" && isAdmin && (
+          <AdminExtrasSection
+            poolId={poolId}
+            results={adminExtras}
+            allTeams={allTeams}
+            onResultChange={handleAdminExtraChange}
+            filledCount={adminFilledCount}
+          />
+        )}
       </main>
 
       {/* RIGHT — standings & progress (only for groups) */}
@@ -1348,27 +1439,6 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
               );
             })}
           </div>
-        </div>
-
-        {/* Pending */}
-        <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 mb-4">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-2">
-            Pendiente
-          </div>
-          <ul className="space-y-1.5 text-[12px] text-zinc-300">
-            <li className="flex items-center gap-2">
-              <span className="w-1 h-1 rounded-full bg-zinc-600" />
-              Eliminatorias (bracket)
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="w-1 h-1 rounded-full bg-zinc-600" />
-              Máximo goleador
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="w-1 h-1 rounded-full bg-zinc-600" />
-              Mejor jugador (MVP)
-            </li>
-          </ul>
         </div>
 
         <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 text-center">
