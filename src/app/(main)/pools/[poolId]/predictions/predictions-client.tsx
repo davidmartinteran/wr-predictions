@@ -1,18 +1,60 @@
 "use client";
 
-import { useState, useCallback, useRef, useTransition, useMemo, useEffect } from "react";
-import { Lock, Check, LayoutGrid, GitBranch, Star, ChevronLeft, ChevronRight, Eye, Snowflake, Settings } from "lucide-react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useTransition,
+  useMemo,
+  useEffect,
+} from "react";
+import {
+  Lock,
+  Check,
+  LayoutGrid,
+  GitBranch,
+  Star,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Snowflake,
+  Settings,
+} from "lucide-react";
 import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
 import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
-import { savePrediction, saveExtra, deleteExtra, saveKnockoutPrediction, deleteKnockoutPredictions, saveGroupTiebreak, deleteGroupTiebreak, saveAdminExtra, deleteAdminExtra } from "./actions";
-import { ExtrasSection, EXTRAS_TOTAL } from "@/components/predictions/extras-section";
-import { AdminExtrasSection, ADMIN_EXTRAS_TOTAL } from "@/components/predictions/admin-extras-section";
+import {
+  savePrediction,
+  saveExtra,
+  deleteExtra,
+  saveKnockoutPrediction,
+  deleteKnockoutPredictions,
+  saveGroupTiebreak,
+  deleteGroupTiebreak,
+  saveAdminExtra,
+  deleteAdminExtra,
+} from "./actions";
+import {
+  ExtrasSection,
+  EXTRAS_TOTAL,
+} from "@/components/predictions/extras-section";
+import {
+  AdminExtrasSection,
+  ADMIN_EXTRAS_TOTAL,
+} from "@/components/predictions/admin-extras-section";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
 import { computeStandings } from "@/lib/bracket/standings";
-import { deriveAllGroupStandings, rankThirdPlacedTeams, resolveThirds, buildBracketState, cascadeInvalidation, type BracketState, type ThirdPlaceTeam } from "@/lib/bracket/engine";
+import {
+  deriveAllGroupStandings,
+  rankThirdPlacedTeams,
+  resolveThirds,
+  buildBracketState,
+  cascadeInvalidation,
+  type BracketState,
+  type ThirdPlaceTeam,
+} from "@/lib/bracket/engine";
 import { TOTAL_BRACKET_PICKS, type Stage } from "@/lib/bracket/mapping";
 import { detectGroupTies } from "@/lib/bracket/standings";
 import { BracketMobileView } from "@/components/bracket/bracket-mobile";
@@ -97,12 +139,32 @@ function getMatchday(matchNumber: number): number {
   return 3;
 }
 
-
-export function PredictionsClient({ poolId, matches, predictions, extraPredictions, allTeams, knockoutPredictions, disabled, viewMode, ownPredictions, targetDisplayName, poolParticipants, targetUserId, savedTiebreaks, isAdmin, adminResults }: Props) {
+export function PredictionsClient({
+  poolId,
+  matches,
+  predictions,
+  extraPredictions,
+  allTeams,
+  knockoutPredictions,
+  disabled,
+  viewMode,
+  ownPredictions,
+  targetDisplayName,
+  poolParticipants,
+  targetUserId,
+  savedTiebreaks,
+  isAdmin,
+  adminResults,
+}: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
-  const [scores, setScores] = useState<Record<string, { home: number | null; away: number | null }>>(() => {
-    const initial: Record<string, { home: number | null; away: number | null }> = {};
+  const [scores, setScores] = useState<
+    Record<string, { home: number | null; away: number | null }>
+  >(() => {
+    const initial: Record<
+      string,
+      { home: number | null; away: number | null }
+    > = {};
     for (const p of predictions) {
       initial[p.match_id] = { home: p.home_score, away: p.away_score };
     }
@@ -115,14 +177,18 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     }
     return initial;
   });
-  const [knockoutPicks, setKnockoutPicks] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
-    for (const p of knockoutPredictions) {
-      initial[`${p.stage}:${p.slot}`] = p.team_id;
-    }
-    return initial;
-  });
-  const [groupTiebreaks, setGroupTiebreaks] = useState<Record<string, string[]>>(() => {
+  const [knockoutPicks, setKnockoutPicks] = useState<Record<string, string>>(
+    () => {
+      const initial: Record<string, string> = {};
+      for (const p of knockoutPredictions) {
+        initial[`${p.stage}:${p.slot}`] = p.team_id;
+      }
+      return initial;
+    },
+  );
+  const [groupTiebreaks, setGroupTiebreaks] = useState<
+    Record<string, string[]>
+  >(() => {
     const initial: Record<string, string[]> = {};
     for (const t of savedTiebreaks) {
       initial[t.group_letter] = t.ordered_team_ids;
@@ -137,37 +203,52 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     return initial;
   });
   const [selectedThirds, setSelectedThirds] = useState<string[]>([]);
-  const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(null);
+  const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(
+    null,
+  );
   const [, startTransition] = useTransition();
-  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
   const extraTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  const knockoutTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const knockoutTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {},
+  );
   const adminTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const groupMatches = matches
     .filter((m) => m.group_letter === activeGroup)
     .sort((a, b) => a.match_number - b.match_number);
 
-  const isMatchComplete = useCallback((m: Match) => {
-    const s = scores[m.id];
-    if (!s || s.home === null || s.away === null) return false;
-    return true;
-  }, [scores]);
+  const isMatchComplete = useCallback(
+    (m: Match) => {
+      const s = scores[m.id];
+      if (!s || s.home === null || s.away === null) return false;
+      return true;
+    },
+    [scores],
+  );
 
   const totalMatches = matches.length;
   const completedCount = matches.filter(isMatchComplete).length;
 
   const groupFilled = groupMatches.filter(isMatchComplete).length;
 
-  const groupComplete = useCallback((group: string) => {
-    const gm = matches.filter((m) => m.group_letter === group);
-    return gm.every(isMatchComplete);
-  }, [matches, isMatchComplete]);
+  const groupComplete = useCallback(
+    (group: string) => {
+      const gm = matches.filter((m) => m.group_letter === group);
+      return gm.every(isMatchComplete);
+    },
+    [matches, isMatchComplete],
+  );
 
-  const groupFilledCount = useCallback((group: string) => {
-    const gm = matches.filter((m) => m.group_letter === group);
-    return gm.filter(isMatchComplete).length;
-  }, [matches, isMatchComplete]);
+  const groupFilledCount = useCallback(
+    (group: string) => {
+      const gm = matches.filter((m) => m.group_letter === group);
+      return gm.filter(isMatchComplete).length;
+    },
+    [matches, isMatchComplete],
+  );
 
   const standings = useMemo(() => {
     const base = computeStandings(activeGroup, matches, scores);
@@ -176,7 +257,7 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     // Only reorder the tied teams in-place, keeping everyone else in their original position
     const rows = [...base.rows];
     const tiedIndices = rows
-      .map((r, i) => tiebreak.includes(r.id) ? i : -1)
+      .map((r, i) => (tiebreak.includes(r.id) ? i : -1))
       .filter((i) => i !== -1);
     const reordered = tiebreak
       .map((id) => rows.find((r) => r.id === id)!)
@@ -207,9 +288,8 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
         }, 500);
       }
     },
-    [poolId]
+    [poolId],
   );
-
 
   const goNextGroup = useCallback(() => {
     const idx = GROUPS.indexOf(activeGroup);
@@ -240,14 +320,18 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
       extraTimers.current[kind] = setTimeout(() => {
         startTransition(async () => {
           if (value) {
-            await saveExtra({ pool_id: poolId, kind: kind as "TOP_SCORER", value });
+            await saveExtra({
+              pool_id: poolId,
+              kind: kind as "TOP_SCORER",
+              value,
+            });
           } else {
             await deleteExtra({ pool_id: poolId, kind: kind as "TOP_SCORER" });
           }
         });
       }, 500);
     },
-    [poolId]
+    [poolId],
   );
 
   const extrasFilledCount = useMemo(() => {
@@ -272,14 +356,18 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
       adminTimers.current[kind] = setTimeout(() => {
         startTransition(async () => {
           if (value) {
-            await saveAdminExtra({ pool_id: poolId, kind: kind as "TOP_SCORER", value });
+            await saveAdminExtra({
+              pool_id: poolId,
+              kind: kind as "TOP_SCORER",
+              value,
+            });
           } else {
             await deleteAdminExtra({ pool_id: poolId, kind });
           }
         });
       }, 500);
     },
-    [poolId]
+    [poolId],
   );
 
   const adminFilledCount = useMemo(() => {
@@ -290,13 +378,13 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
 
   // Bracket computation — recomputes on any score change so group changes propagate
   const allStandings = useMemo(
-    () => allGroupsComplete ? deriveAllGroupStandings(matches, scores) : null,
-    [allGroupsComplete, matches, scores]
+    () => (allGroupsComplete ? deriveAllGroupStandings(matches, scores) : null),
+    [allGroupsComplete, matches, scores],
   );
 
   const thirdsRanking = useMemo(
-    () => allStandings ? rankThirdPlacedTeams(allStandings) : null,
-    [allStandings]
+    () => (allStandings ? rankThirdPlacedTeams(allStandings) : null),
+    [allStandings],
   );
 
   // Clear stale selectedThirds when thirds ranking changes
@@ -318,22 +406,35 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
 
   const bracketState = useMemo<BracketState | null>(() => {
     if (!allStandings || !thirdsRanking || !thirdsResolved) return null;
-    const resolvedThirdTeams = thirdsRanking.tied.length === 0
-      ? thirdsRanking.autoQualified
-      : resolveThirds(
-          thirdsRanking.autoQualified,
-          thirdsRanking.tied.filter((t) => selectedThirds.includes(t.id))
-        );
-    return buildBracketState(allStandings, resolvedThirdTeams, knockoutPicks, groupTiebreaks);
-  }, [allStandings, thirdsRanking, thirdsResolved, selectedThirds, knockoutPicks, groupTiebreaks]);
+    const resolvedThirdTeams =
+      thirdsRanking.tied.length === 0
+        ? thirdsRanking.autoQualified
+        : resolveThirds(
+            thirdsRanking.autoQualified,
+            thirdsRanking.tied.filter((t) => selectedThirds.includes(t.id)),
+          );
+    return buildBracketState(
+      allStandings,
+      resolvedThirdTeams,
+      knockoutPicks,
+      groupTiebreaks,
+    );
+  }, [
+    allStandings,
+    thirdsRanking,
+    thirdsResolved,
+    selectedThirds,
+    knockoutPicks,
+    groupTiebreaks,
+  ]);
 
   // Clear all knockout picks when R32 teams change (group results altered qualified teams)
   const prevR32Hash = useRef<string>("");
   useEffect(() => {
     if (!bracketState) return;
-    const hash = bracketState.matches.R32
-      .map((m) => `${m.homeTeam?.id ?? ""},${m.awayTeam?.id ?? ""}`)
-      .join("|");
+    const hash = bracketState.matches.R32.map(
+      (m) => `${m.homeTeam?.id ?? ""},${m.awayTeam?.id ?? ""}`,
+    ).join("|");
     if (prevR32Hash.current && prevR32Hash.current !== hash) {
       setKnockoutPicks({});
       startTransition(async () => {
@@ -364,13 +465,18 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
           return next;
         });
         startTransition(async () => {
-          await deleteKnockoutPredictions({ pool_id: poolId, picks: allToRemove });
+          await deleteKnockoutPredictions({
+            pool_id: poolId,
+            picks: allToRemove,
+          });
         });
         return;
       }
 
       // Cascade invalidation for old pick
-      const invalidated = oldPick ? cascadeInvalidation(knockoutPicks, stage, slot) : [];
+      const invalidated = oldPick
+        ? cascadeInvalidation(knockoutPicks, stage, slot)
+        : [];
 
       setKnockoutPicks((prev) => {
         const next = { ...prev, [key]: teamId };
@@ -381,34 +487,52 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
       // Delete invalidated picks
       if (invalidated.length > 0) {
         startTransition(async () => {
-          await deleteKnockoutPredictions({ pool_id: poolId, picks: invalidated });
+          await deleteKnockoutPredictions({
+            pool_id: poolId,
+            picks: invalidated,
+          });
         });
       }
 
       // Save new pick with debounce
-      if (knockoutTimers.current[key]) clearTimeout(knockoutTimers.current[key]);
+      if (knockoutTimers.current[key])
+        clearTimeout(knockoutTimers.current[key]);
       knockoutTimers.current[key] = setTimeout(() => {
         startTransition(async () => {
-          await saveKnockoutPrediction({ pool_id: poolId, stage, slot, team_id: teamId });
+          await saveKnockoutPrediction({
+            pool_id: poolId,
+            stage,
+            slot,
+            team_id: teamId,
+          });
         });
       }, 300);
     },
-    [poolId, knockoutPicks]
+    [poolId, knockoutPicks],
   );
 
   const handleThirdToggle = useCallback((teamId: string) => {
     setSelectedThirds((prev) =>
-      prev.includes(teamId) ? prev.filter((id) => id !== teamId) : [...prev, teamId]
+      prev.includes(teamId)
+        ? prev.filter((id) => id !== teamId)
+        : [...prev, teamId],
     );
   }, []);
 
-  const handleTiebreakResolve = useCallback((group: string, ordered: string[]) => {
-    setGroupTiebreaks((prev) => ({ ...prev, [group]: ordered }));
-    setTiebreakModal(null);
-    startTransition(async () => {
-      await saveGroupTiebreak({ pool_id: poolId, group_letter: group, ordered_team_ids: ordered });
-    });
-  }, [poolId]);
+  const handleTiebreakResolve = useCallback(
+    (group: string, ordered: string[]) => {
+      setGroupTiebreaks((prev) => ({ ...prev, [group]: ordered }));
+      setTiebreakModal(null);
+      startTransition(async () => {
+        await saveGroupTiebreak({
+          pool_id: poolId,
+          group_letter: group,
+          ordered_team_ids: ordered,
+        });
+      });
+    },
+    [poolId],
+  );
 
   // Track standings hash per group to detect changes and invalidate tiebreaks
   const prevStandingsHash = useRef<Record<string, string>>({});
@@ -416,7 +540,9 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     for (const g of GROUPS) {
       if (!groupComplete(g)) continue;
       const s = computeStandings(g, matches, scores);
-      const hash = s.rows.map((r) => `${r.id}:${r.pts}:${r.gd}:${r.gf}`).join(",");
+      const hash = s.rows
+        .map((r) => `${r.id}:${r.pts}:${r.gd}:${r.gf}`)
+        .join(",");
       const prev = prevStandingsHash.current[g];
       if (prev && prev !== hash) {
         // Standings changed — clear old tiebreak resolution
@@ -454,16 +580,29 @@ export function PredictionsClient({ poolId, matches, predictions, extraPredictio
     }
   }, [pendingTiebreakGroup]);
 
-  const sectionCounts = useMemo(() => ({
-    groups: { filled: completedCount, total: totalMatches },
-    bracket: { filled: bracketState?.filledCount ?? 0, total: TOTAL_BRACKET_PICKS },
-    extras: { filled: extrasFilledCount, total: EXTRAS_TOTAL },
-    admin: { filled: adminFilledCount, total: ADMIN_EXTRAS_TOTAL },
-  }), [completedCount, totalMatches, extrasFilledCount, bracketState, adminFilledCount]);
+  const sectionCounts = useMemo(
+    () => ({
+      groups: { filled: completedCount, total: totalMatches },
+      bracket: {
+        filled: bracketState?.filledCount ?? 0,
+        total: TOTAL_BRACKET_PICKS,
+      },
+      extras: { filled: extrasFilledCount, total: EXTRAS_TOTAL },
+      admin: { filled: adminFilledCount, total: ADMIN_EXTRAS_TOTAL },
+    }),
+    [
+      completedCount,
+      totalMatches,
+      extrasFilledCount,
+      bracketState,
+      adminFilledCount,
+    ],
+  );
 
   const ownScores = useMemo(() => {
     if (!ownPredictions) return null;
-    const map: Record<string, { home: number | null; away: number | null }> = {};
+    const map: Record<string, { home: number | null; away: number | null }> =
+      {};
     for (const p of ownPredictions) {
       map[p.match_id] = { home: p.home_score, away: p.away_score };
     }
@@ -556,7 +695,11 @@ type LayoutProps = {
   isMatchComplete: (m: Match) => boolean;
   standings: ReturnType<typeof computeStandings>;
   disabled: boolean;
-  handleScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  handleScoreChange: (
+    matchId: string,
+    home: number | null,
+    away: number | null,
+  ) => void;
   goNextGroup: () => void;
   goToBracket: () => void;
   extras: Record<string, string>;
@@ -571,13 +714,20 @@ type LayoutProps = {
   handleKnockoutPick: (stage: Stage, slot: number, teamId: string) => void;
   handleThirdToggle: (teamId: string) => void;
   groupTiebreaks: Record<string, string[]>;
-  setGroupTiebreaks: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  setGroupTiebreaks: React.Dispatch<
+    React.SetStateAction<Record<string, string[]>>
+  >;
   tiebreakModal: { group: string } | null;
-  setTiebreakModal: React.Dispatch<React.SetStateAction<{ group: string } | null>>;
+  setTiebreakModal: React.Dispatch<
+    React.SetStateAction<{ group: string } | null>
+  >;
   handleTiebreakResolve: (group: string, ordered: string[]) => void;
   allStandings: Record<string, ReturnType<typeof computeStandings>> | null;
   viewMode: ViewMode;
-  ownScores: Record<string, { home: number | null; away: number | null }> | null;
+  ownScores: Record<
+    string,
+    { home: number | null; away: number | null }
+  > | null;
   targetDisplayName?: string | null;
   poolParticipants?: PoolParticipant[] | null;
   targetUserId?: string;
@@ -589,16 +739,48 @@ type LayoutProps = {
 
 function MobileLayout(props: LayoutProps) {
   const {
-    activeSection, setActiveSection, sectionCounts, allGroupsComplete,
-    activeGroup, setActiveGroup, groupMatches, scores,
-    completedCount, totalMatches, groupFilled, groupComplete, isMatchComplete,
-    standings, disabled, handleScoreChange,
-    goNextGroup, goToBracket, extras, allTeams, handleExtraChange,
-    extrasFilledCount, poolId, bracketState, thirdsRanking, thirdsResolved,
-    selectedThirds, handleKnockoutPick, handleThirdToggle, tiebreakModal,
-    setTiebreakModal, setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
-    targetDisplayName, poolParticipants, targetUserId,
-    isAdmin, adminExtras, handleAdminExtraChange, adminFilledCount,
+    activeSection,
+    setActiveSection,
+    sectionCounts,
+    allGroupsComplete,
+    activeGroup,
+    setActiveGroup,
+    groupMatches,
+    scores,
+    completedCount,
+    totalMatches,
+    groupFilled,
+    groupComplete,
+    isMatchComplete,
+    standings,
+    disabled,
+    handleScoreChange,
+    goNextGroup,
+    goToBracket,
+    extras,
+    allTeams,
+    handleExtraChange,
+    extrasFilledCount,
+    poolId,
+    bracketState,
+    thirdsRanking,
+    thirdsResolved,
+    selectedThirds,
+    handleKnockoutPick,
+    handleThirdToggle,
+    tiebreakModal,
+    setTiebreakModal,
+    setGroupTiebreaks,
+    handleTiebreakResolve,
+    viewMode,
+    ownScores,
+    targetDisplayName,
+    poolParticipants,
+    targetUserId,
+    isAdmin,
+    adminExtras,
+    handleAdminExtraChange,
+    adminFilledCount,
   } = props;
 
   const accentColor = VIEW_COLORS[viewMode];
@@ -609,8 +791,12 @@ function MobileLayout(props: LayoutProps) {
       {viewMode === "own-closed" && (
         <div className="px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
           <Snowflake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span className="text-[12px] text-amber-200 font-medium">Pronósticos congelados</span>
-          <span className="text-[11px] text-amber-400/60 ml-auto">Sólo lectura</span>
+          <span className="text-[12px] text-amber-200 font-medium">
+            Pronósticos congelados
+          </span>
+          <span className="text-[11px] text-amber-400/60 ml-auto">
+            Sólo lectura
+          </span>
         </div>
       )}
 
@@ -639,8 +825,13 @@ function MobileLayout(props: LayoutProps) {
             </div>
           )}
           {viewMode === "viewing-other" && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-medium"
-              style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
+            <div
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full border text-[11px] font-medium"
+              style={{
+                background: "rgba(168, 85, 247, 0.1)",
+                borderColor: "rgba(168, 85, 247, 0.3)",
+                color: "#A855F7",
+              }}
             >
               <Eye className="w-3 h-3" />
               <span>Sólo lectura</span>
@@ -649,7 +840,9 @@ function MobileLayout(props: LayoutProps) {
         </div>
 
         {/* Section tabs */}
-        <div className={`grid gap-1.5 ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}>
+        <div
+          className={`grid gap-1.5 ${isAdmin ? "grid-cols-4" : "grid-cols-3"}`}
+        >
           <MobileSectionPill
             active={activeSection === "groups"}
             icon={<LayoutGrid className="w-3.5 h-3.5" />}
@@ -702,7 +895,7 @@ function MobileLayout(props: LayoutProps) {
                     onClick={() => setActiveGroup(g)}
                     className={cn(
                       "relative shrink-0 px-3.5 py-3 text-[13px] font-medium transition-colors",
-                      active ? "text-zinc-50" : "text-zinc-500"
+                      active ? "text-zinc-50" : "text-zinc-500",
                     )}
                   >
                     Grupo {g}
@@ -721,7 +914,7 @@ function MobileLayout(props: LayoutProps) {
           </div>
 
           {/* Match list */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-3 pb-52 min-h-0">
+          <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-3 pb-4 min-h-0">
             <div className="flex items-center justify-between mb-2.5 px-1">
               <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
                 {groupMatches.length} partidos · Grupo {activeGroup}
@@ -756,8 +949,8 @@ function MobileLayout(props: LayoutProps) {
             </div>
           </div>
 
-          {/* Fixed bottom section: button + standings, above BottomNav */}
-          <div className="fixed bottom-16 inset-x-0 z-40">
+          {/* Bottom section: button + standings */}
+          <div className="shrink-0 pt-3">
             {viewMode === "own-open" && (
               <div className="px-4 pb-2">
                 {activeGroup === "L" ? (
@@ -789,8 +982,8 @@ function MobileLayout(props: LayoutProps) {
         </>
       )}
 
-      {activeSection === "bracket" && (
-        !allGroupsComplete ? (
+      {activeSection === "bracket" &&
+        (!allGroupsComplete ? (
           <SectionPlaceholder
             section="bracket"
             groupsComplete={false}
@@ -798,7 +991,9 @@ function MobileLayout(props: LayoutProps) {
             totalMatches={totalMatches}
             onGoToGroups={() => setActiveSection("groups")}
           />
-        ) : thirdsRanking && thirdsRanking.tied.length > 0 && !thirdsResolved ? (
+        ) : thirdsRanking &&
+          thirdsRanking.tied.length > 0 &&
+          !thirdsResolved ? (
           <ThirdsTiebreaker
             autoQualified={thirdsRanking.autoQualified}
             tiedTeams={thirdsRanking.tied}
@@ -812,8 +1007,7 @@ function MobileLayout(props: LayoutProps) {
             disabled={disabled}
             onPickWinner={handleKnockoutPick}
           />
-        ) : null
-      )}
+        ) : null)}
       {activeSection === "extras" && (
         <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
           <ExtrasSection
@@ -839,27 +1033,36 @@ function MobileLayout(props: LayoutProps) {
       )}
 
       {/* Group tiebreak modal */}
-      {tiebreakModal && props.allStandings && (() => {
-        const s = props.allStandings[tiebreakModal.group];
-        if (!s) return null;
-        const tie = detectGroupTies(s);
-        if (!tie) return null;
-        return (
-          <GroupTiebreakModal
-            groupLetter={tiebreakModal.group}
-            tiedTeams={tie.teams}
-            tiedPositions={tie.positions}
-            onResolve={(ordered) => handleTiebreakResolve(tiebreakModal.group, ordered)}
-            onClose={() => setTiebreakModal(null)}
-          />
-        );
-      })()}
+      {tiebreakModal &&
+        props.allStandings &&
+        (() => {
+          const s = props.allStandings[tiebreakModal.group];
+          if (!s) return null;
+          const tie = detectGroupTies(s);
+          if (!tie) return null;
+          return (
+            <GroupTiebreakModal
+              groupLetter={tiebreakModal.group}
+              tiedTeams={tie.teams}
+              tiedPositions={tie.positions}
+              onResolve={(ordered) =>
+                handleTiebreakResolve(tiebreakModal.group, ordered)
+              }
+              onClose={() => setTiebreakModal(null)}
+            />
+          );
+        })()}
     </div>
   );
 }
 
 function hexAlpha(hex: string, a: number) {
-  return hex + Math.round(a * 255).toString(16).padStart(2, "0");
+  return (
+    hex +
+    Math.round(a * 255)
+      .toString(16)
+      .padStart(2, "0")
+  );
 }
 
 function MobileSectionPill({
@@ -886,7 +1089,10 @@ function MobileSectionPill({
       style={
         active
           ? { background: hexAlpha(color, 0.12), borderColor: color }
-          : { background: "rgb(24 24 27 / 0.6)", borderColor: "rgba(39, 39, 42, 0.8)" }
+          : {
+              background: "rgb(24 24 27 / 0.6)",
+              borderColor: "rgba(39, 39, 42, 0.8)",
+            }
       }
     >
       <span style={{ color: active ? color : "rgb(113 113 122)" }}>{icon}</span>
@@ -899,7 +1105,10 @@ function MobileSectionPill({
         </span>
         <span
           className="text-[9.5px] tabular-nums"
-          style={{ color: active ? hexAlpha(color, 0.75) : "rgb(113 113 122)", fontFamily: "var(--font-mono), ui-monospace, monospace" }}
+          style={{
+            color: active ? hexAlpha(color, 0.75) : "rgb(113 113 122)",
+            fontFamily: "var(--font-mono), ui-monospace, monospace",
+          }}
         >
           {count}
         </span>
@@ -929,13 +1138,16 @@ function SectionPlaceholder({
       icon: <GitBranch className="w-8 h-8 text-zinc-600" />,
       title: "Eliminatorias",
       lockedDescription: `Completa los ${totalMatches} partidos de la fase de grupos para desbloquear el bracket. Los clasificados de cada grupo se calcularán automáticamente a partir de tus marcadores.`,
-      readyDescription: "Predice los cruces desde dieciseisavos de final hasta la gran final.",
+      readyDescription:
+        "Predice los cruces desde dieciseisavos de final hasta la gran final.",
     },
     extras: {
       icon: <Star className="w-8 h-8 text-zinc-600" />,
       title: "Extras",
-      lockedDescription: "Máximo goleador, mejor jugador, y más predicciones bonus.",
-      readyDescription: "Máximo goleador, mejor jugador, y más predicciones bonus.",
+      lockedDescription:
+        "Máximo goleador, mejor jugador, y más predicciones bonus.",
+      readyDescription:
+        "Máximo goleador, mejor jugador, y más predicciones bonus.",
     },
   };
 
@@ -950,13 +1162,17 @@ function SectionPlaceholder({
       </div>
       <div>
         <h2 className="text-[17px] font-semibold text-zinc-50 mb-1">{title}</h2>
-        <p className="text-[13px] text-zinc-500 leading-relaxed max-w-[280px]">{description}</p>
+        <p className="text-[13px] text-zinc-500 leading-relaxed max-w-[280px]">
+          {description}
+        </p>
       </div>
       {locked && (
         <>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
             <Lock className="w-3 h-3" />
-            <span className="tabular-nums">{completedCount}/{totalMatches} partidos completados</span>
+            <span className="tabular-nums">
+              {completedCount}/{totalMatches} partidos completados
+            </span>
           </div>
           <button
             onClick={onGoToGroups}
@@ -972,18 +1188,54 @@ function SectionPlaceholder({
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => number }) {
+function DesktopLayout(
+  props: LayoutProps & { groupFilledCount: (g: string) => number },
+) {
   const {
-    activeSection, setActiveSection, sectionCounts, allGroupsComplete,
-    activeGroup, setActiveGroup, groupMatches, matches, scores,
-    completedCount, totalMatches, groupFilled, groupComplete, groupFilledCount,
-    isMatchComplete, standings, disabled, handleScoreChange,
-    goNextGroup, goToBracket, extras, allTeams, handleExtraChange, extrasFilledCount,
-    poolId, bracketState, thirdsRanking, thirdsResolved, selectedThirds,
-    handleKnockoutPick, handleThirdToggle, tiebreakModal, setTiebreakModal,
-    setGroupTiebreaks, handleTiebreakResolve, viewMode, ownScores,
-    targetDisplayName, poolParticipants, targetUserId,
-    isAdmin, adminExtras, handleAdminExtraChange, adminFilledCount,
+    activeSection,
+    setActiveSection,
+    sectionCounts,
+    allGroupsComplete,
+    activeGroup,
+    setActiveGroup,
+    groupMatches,
+    matches,
+    scores,
+    completedCount,
+    totalMatches,
+    groupFilled,
+    groupComplete,
+    groupFilledCount,
+    isMatchComplete,
+    standings,
+    disabled,
+    handleScoreChange,
+    goNextGroup,
+    goToBracket,
+    extras,
+    allTeams,
+    handleExtraChange,
+    extrasFilledCount,
+    poolId,
+    bracketState,
+    thirdsRanking,
+    thirdsResolved,
+    selectedThirds,
+    handleKnockoutPick,
+    handleThirdToggle,
+    tiebreakModal,
+    setTiebreakModal,
+    setGroupTiebreaks,
+    handleTiebreakResolve,
+    viewMode,
+    ownScores,
+    targetDisplayName,
+    poolParticipants,
+    targetUserId,
+    isAdmin,
+    adminExtras,
+    handleAdminExtraChange,
+    adminFilledCount,
   } = props;
   const accentColor = VIEW_COLORS[viewMode];
   const activeGroupTeams = useMemo(() => {
@@ -1005,7 +1257,12 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
   }, [groupMatches]);
 
   const targetInitials = targetDisplayName
-    ? targetDisplayName.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+    ? targetDisplayName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
     : "??";
 
   return (
@@ -1022,28 +1279,45 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
           </a>
 
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-              style={{ background: "rgba(168, 85, 247, 0.2)", color: "#A855F7" }}
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+              style={{
+                background: "rgba(168, 85, 247, 0.2)",
+                color: "#A855F7",
+              }}
             >
               {targetInitials}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10.5px] uppercase tracking-[0.12em] text-purple-400 font-medium">Porra de</span>
-                <span className="text-[14px] font-semibold text-zinc-50 truncate">{targetDisplayName}</span>
+                <span className="text-[10.5px] uppercase tracking-[0.12em] text-purple-400 font-medium">
+                  Porra de
+                </span>
+                <span className="text-[14px] font-semibold text-zinc-50 truncate">
+                  {targetDisplayName}
+                </span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             {(() => {
-              const currentIdx = (poolParticipants ?? []).findIndex(p => p.userId === targetUserId);
-              const prev = currentIdx > 0 ? (poolParticipants ?? [])[currentIdx - 1] : null;
-              const next = currentIdx < (poolParticipants ?? []).length - 1 ? (poolParticipants ?? [])[currentIdx + 1] : null;
+              const currentIdx = (poolParticipants ?? []).findIndex(
+                (p) => p.userId === targetUserId,
+              );
+              const prev =
+                currentIdx > 0
+                  ? (poolParticipants ?? [])[currentIdx - 1]
+                  : null;
+              const next =
+                currentIdx < (poolParticipants ?? []).length - 1
+                  ? (poolParticipants ?? [])[currentIdx + 1]
+                  : null;
               return (
                 <>
                   {prev ? (
-                    <a href={`/pools/${poolId}/predictions?player=${prev.userId}`}
+                    <a
+                      href={`/pools/${poolId}/predictions?player=${prev.userId}`}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
                     >
                       <ChevronLeft className="w-3 h-3" />
@@ -1056,7 +1330,8 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
                     </span>
                   )}
                   {next ? (
-                    <a href={`/pools/${poolId}/predictions?player=${next.userId}`}
+                    <a
+                      href={`/pools/${poolId}/predictions?player=${next.userId}`}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-800 hover:bg-zinc-900 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
                     >
                       Jugador siguiente
@@ -1071,8 +1346,13 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
                 </>
               );
             })()}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[11px] font-medium ml-2"
-              style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-[11px] font-medium ml-2"
+              style={{
+                background: "rgba(168, 85, 247, 0.1)",
+                borderColor: "rgba(168, 85, 247, 0.3)",
+                color: "#A855F7",
+              }}
             >
               <Eye className="w-3 h-3" />
               <span>Sólo lectura</span>
@@ -1081,401 +1361,457 @@ function DesktopLayout(props: LayoutProps & { groupFilledCount: (g: string) => n
         </div>
       )}
 
-    <div className="flex flex-1 min-h-0">
-      {/* LEFT — sidebar */}
-      <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
-        <div className="p-5 border-b border-zinc-800/80">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-1">
-            Pronósticos · Mundial 2026
-          </div>
-          {viewMode !== "own-open" && (
-            <div className="text-[10px] text-zinc-600">Sólo lectura</div>
-          )}
-        </div>
-
-        {/* Frozen banner (desktop) */}
-        {viewMode === "own-closed" && (
-          <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
-            <Snowflake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <div>
-              <div className="text-[11px] text-amber-200 font-medium">Congelados</div>
-              <div className="text-[10px] text-amber-400/60">Sólo lectura</div>
+      <div className="flex flex-1 min-h-0">
+        {/* LEFT — sidebar */}
+        <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
+          <div className="p-5 border-b border-zinc-800/80">
+            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-1">
+              Pronósticos · Mundial 2026
             </div>
+            {viewMode !== "own-open" && (
+              <div className="text-[10px] text-zinc-600">Sólo lectura</div>
+            )}
           </div>
-        )}
 
-        {/* Section nav */}
-        <div className="p-3 border-b border-zinc-800/80 flex flex-col gap-1">
-          <DesktopSectionItem
-            active={activeSection === "groups"}
-            icon={<LayoutGrid className="w-4 h-4" />}
-            label="Grupos"
-            filled={sectionCounts.groups.filled}
-            total={sectionCounts.groups.total}
-            color={viewMode === "own-open" ? "#1B9E5B" : accentColor}
-            onClick={() => setActiveSection("groups")}
-          />
-          <DesktopSectionItem
-            active={activeSection === "bracket"}
-            icon={<GitBranch className="w-4 h-4" />}
-            label="Bracket"
-            filled={sectionCounts.bracket.filled}
-            total={sectionCounts.bracket.total}
-            color={viewMode === "own-open" ? "#A855F7" : accentColor}
-            locked={viewMode === "own-open"}
-            onClick={() => setActiveSection("bracket")}
-          />
-          <DesktopSectionItem
-            active={activeSection === "extras"}
-            icon={<Star className="w-4 h-4" />}
-            label="Extras"
-            filled={sectionCounts.extras.filled}
-            total={sectionCounts.extras.total}
-            color={viewMode === "own-open" ? "#F59E0B" : accentColor}
-            onClick={() => setActiveSection("extras")}
-          />
-          {isAdmin && (
+          {/* Frozen banner (desktop) */}
+          {viewMode === "own-closed" && (
+            <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
+              <Snowflake className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <div>
+                <div className="text-[11px] text-amber-200 font-medium">
+                  Congelados
+                </div>
+                <div className="text-[10px] text-amber-400/60">
+                  Sólo lectura
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section nav */}
+          <div className="p-3 border-b border-zinc-800/80 flex flex-col gap-1">
             <DesktopSectionItem
-              active={activeSection === "admin"}
-              icon={<Settings className="w-4 h-4" />}
-              label="Admin"
-              filled={sectionCounts.admin.filled}
-              total={sectionCounts.admin.total}
-              color="#f43f5e"
-              onClick={() => setActiveSection("admin")}
+              active={activeSection === "groups"}
+              icon={<LayoutGrid className="w-4 h-4" />}
+              label="Grupos"
+              filled={sectionCounts.groups.filled}
+              total={sectionCounts.groups.total}
+              color={viewMode === "own-open" ? "#1B9E5B" : accentColor}
+              onClick={() => setActiveSection("groups")}
             />
-          )}
-        </div>
-
-        {/* Group list (only when groups section active) */}
-        {activeSection === "groups" && (
-        <div className="p-3 flex-1 overflow-y-auto scrollbar-thin">
-          <div className="flex items-center justify-between px-3 mb-2">
-            <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium">Grupos</div>
-            <div className="text-[10.5px] text-zinc-500 tabular-nums">{completedCount}/{totalMatches}</div>
-          </div>
-          {GROUPS.map((g) => {
-            const filled = groupFilledCount(g);
-            const active = g === activeGroup;
-            const done = groupComplete(g);
-            const gMatches = matches.filter((m) => m.group_letter === g);
-            const teamCodes = gMatches
-              .reduce<string[]>((acc, m) => {
-                if (!acc.includes(m.home_team_data.code)) acc.push(m.home_team_data.code);
-                if (!acc.includes(m.away_team_data.code)) acc.push(m.away_team_data.code);
-                return acc;
-              }, [])
-              .slice(0, 4);
-
-            return (
-              <button
-                key={g}
-                onClick={() => setActiveGroup(g)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-left transition-colors",
-                  active
-                    ? "bg-zinc-900 border border-zinc-800"
-                    : "border border-transparent hover:bg-zinc-900/50"
-                )}
-              >
-                <div
-                  className={cn(
-                    "w-7 h-7 rounded-md flex items-center justify-center text-[12px] font-semibold",
-                    active ? "bg-zinc-100 text-zinc-950" : "bg-zinc-800 text-zinc-300"
-                  )}
-                >
-                  {g}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={cn("text-[13px] font-medium", active ? "text-zinc-50" : "text-zinc-300")}>
-                    Grupo {g}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {teamCodes.map((c) => (
-                      <TeamFlag key={c} code={c} size={14} />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {viewMode === "own-open" && (
-                    <div className="text-[10.5px] text-zinc-500 tabular-nums">{filled}/6</div>
-                  )}
-                  {done && viewMode === "own-open" && (
-                    <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center bg-primary">
-                      <Check className="w-2.5 h-2.5 text-zinc-950" />
-                    </div>
-                  )}
-                  {viewMode !== "own-open" && (
-                    <Lock className="w-3.5 h-3.5 text-zinc-600" />
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        )}
-      </aside>
-
-      {/* CENTER */}
-      <main className="flex-1 overflow-y-auto scrollbar-thin">
-        {activeSection === "groups" && (
-        <div className="px-6 xl:px-10 py-7 max-w-[920px]">
-          {/* Group header */}
-          <div className="flex items-baseline justify-between mb-1">
-            <div className="flex items-baseline gap-3">
-              <h1 className="text-[32px] font-bold text-zinc-50 leading-none">
-                Grupo {activeGroup}
-              </h1>
-              <div className="text-[13px] text-zinc-500">
-                6 partidos · {groupFilled}/{groupMatches.length} completos
-              </div>
-            </div>
-            {viewMode === "own-open" && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
-                <Lock className="w-3 h-3" />
-                <span>Bloqueo: 11 jun 17:00</span>
-              </div>
-            )}
-            {viewMode === "viewing-other" && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium"
-                style={{ background: "rgba(168, 85, 247, 0.1)", borderColor: "rgba(168, 85, 247, 0.3)", color: "#A855F7" }}
-              >
-                <Eye className="w-3 h-3" />
-                <span>Pronósticos de {targetDisplayName}</span>
-              </div>
+            <DesktopSectionItem
+              active={activeSection === "bracket"}
+              icon={<GitBranch className="w-4 h-4" />}
+              label="Bracket"
+              filled={sectionCounts.bracket.filled}
+              total={sectionCounts.bracket.total}
+              color={viewMode === "own-open" ? "#A855F7" : accentColor}
+              locked={viewMode === "own-open"}
+              onClick={() => setActiveSection("bracket")}
+            />
+            <DesktopSectionItem
+              active={activeSection === "extras"}
+              icon={<Star className="w-4 h-4" />}
+              label="Extras"
+              filled={sectionCounts.extras.filled}
+              total={sectionCounts.extras.total}
+              color={viewMode === "own-open" ? "#F59E0B" : accentColor}
+              onClick={() => setActiveSection("extras")}
+            />
+            {isAdmin && (
+              <DesktopSectionItem
+                active={activeSection === "admin"}
+                icon={<Settings className="w-4 h-4" />}
+                label="Admin"
+                filled={sectionCounts.admin.filled}
+                total={sectionCounts.admin.total}
+                color="#f43f5e"
+                onClick={() => setActiveSection("admin")}
+              />
             )}
           </div>
 
-          {/* Teams strip */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mt-4 mb-6">
-            {activeGroupTeams.map((t) => (
-              <div
-                key={t.code}
-                className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2.5 flex items-center gap-2.5"
-              >
-                <TeamFlag code={t.code} size={32} />
-                <div className="leading-tight">
-                  <div className="text-[13px] text-zinc-100 font-medium">{t.name}</div>
-                  <div className="text-[10.5px] text-zinc-500">{t.code}</div>
+          {/* Group list (only when groups section active) */}
+          {activeSection === "groups" && (
+            <div className="p-3 flex-1 overflow-y-auto scrollbar-thin">
+              <div className="flex items-center justify-between px-3 mb-2">
+                <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
+                  Grupos
+                </div>
+                <div className="text-[10.5px] text-zinc-500 tabular-nums">
+                  {completedCount}/{totalMatches}
                 </div>
               </div>
-            ))}
-          </div>
+              {GROUPS.map((g) => {
+                const filled = groupFilledCount(g);
+                const active = g === activeGroup;
+                const done = groupComplete(g);
+                const gMatches = matches.filter((m) => m.group_letter === g);
+                const teamCodes = gMatches
+                  .reduce<string[]>((acc, m) => {
+                    if (!acc.includes(m.home_team_data.code))
+                      acc.push(m.home_team_data.code);
+                    if (!acc.includes(m.away_team_data.code))
+                      acc.push(m.away_team_data.code);
+                    return acc;
+                  }, [])
+                  .slice(0, 4);
 
-          {/* Matchdays */}
-          {[1, 2, 3].map((md) => {
-            const dayMatches = matchesByDay[md];
-            if (!dayMatches || dayMatches.length === 0) return null;
-            const firstDate = new Date(dayMatches[0].kickoff);
-            const dateStr = firstDate.toLocaleDateString("es-ES", {
-              day: "numeric",
-              month: "short",
-            });
-
-            return (
-              <div key={md} className="mb-7">
-                <div className="flex items-baseline gap-2 mb-2.5">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-                    Jornada {md}
-                  </div>
-                  <div className="text-[11px] text-zinc-600">{dateStr}</div>
-                </div>
-                <div className="grid grid-cols-1 3xl:grid-cols-2 gap-3">
-                  {dayMatches.map((match) => {
-                    const s = scores[match.id];
-                    const complete = isMatchComplete(match);
-                    const date = new Date(match.kickoff);
-                    const day = date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
-                    const time = date.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-
-                    return (
-                      <div key={match.id}>
-                        <DesktopMatchCard
-                          match={match}
-                          homeScore={s?.home ?? null}
-                          awayScore={s?.away ?? null}
-                          complete={complete}
-                          day={day}
-                          time={time}
-                          disabled={disabled}
-                          onScoreChange={handleScoreChange}
-                          viewMode={viewMode}
-                        />
-                        {viewMode === "viewing-other" && ownScores && (
-                          <OwnPredictionLine
-                            homeScore={ownScores[match.id]?.home ?? null}
-                            awayScore={ownScores[match.id]?.away ?? null}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          {viewMode === "own-open" && (
-            activeGroup === "L" ? (
-              <button
-                onClick={goToBracket}
-                className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-              >
-                Continuar al bracket →
-              </button>
-            ) : (
-              <button
-                onClick={goNextGroup}
-                className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-              >
-                Siguiente grupo →
-              </button>
-            )
-          )}
-        </div>
-        )}
-
-        {activeSection === "bracket" && (
-          !allGroupsComplete ? (
-            <SectionPlaceholder
-              section="bracket"
-              groupsComplete={false}
-              completedCount={completedCount}
-              totalMatches={totalMatches}
-              onGoToGroups={() => setActiveSection("groups")}
-            />
-          ) : thirdsRanking && thirdsRanking.tied.length > 0 && !thirdsResolved ? (
-            <ThirdsTiebreaker
-              autoQualified={thirdsRanking.autoQualified}
-              tiedTeams={thirdsRanking.tied}
-              neededCount={thirdsRanking.neededFromTied}
-              selected={selectedThirds}
-              onToggle={handleThirdToggle}
-            />
-          ) : bracketState ? (
-            <BracketDesktopView
-              bracketState={bracketState}
-              disabled={disabled}
-              onPickWinner={handleKnockoutPick}
-            />
-          ) : null
-        )}
-
-        {activeSection === "extras" && (
-          <ExtrasSection
-            poolId={poolId}
-            extras={extras}
-            allTeams={allTeams}
-            disabled={disabled}
-            onExtraChange={handleExtraChange}
-            filledCount={extrasFilledCount}
-          />
-        )}
-
-        {activeSection === "admin" && isAdmin && (
-          <AdminExtrasSection
-            poolId={poolId}
-            results={adminExtras}
-            allTeams={allTeams}
-            onResultChange={handleAdminExtraChange}
-            filledCount={adminFilledCount}
-          />
-        )}
-      </main>
-
-      {/* RIGHT — standings & progress (only for groups) */}
-      {activeSection === "groups" && (
-      <aside className="w-[240px] xl:w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
-        <DesktopStandingsCard
-          groupId={activeGroup}
-          standings={standings}
-          viewMode={viewMode}
-        />
-
-        {/* Progress card (only own modes) */}
-        {viewMode !== "viewing-other" && (<>
-        <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 mb-4">
-          <div className="flex items-baseline justify-between mb-3">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
-              Tu progreso
-            </div>
-            <div className="text-[11px] tabular-nums font-medium text-primary">
-              {Math.round((completedCount / totalMatches) * 100)}%
-            </div>
-          </div>
-          <div
-            className="text-[28px] font-bold text-zinc-50 tabular-nums leading-none"
-            style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
-          >
-            {completedCount}
-            <span className="text-zinc-600">/{totalMatches}</span>
-          </div>
-          <div className="text-[11px] text-zinc-500 mb-3">partidos de fase de grupos</div>
-          <div className="h-1.5 w-full rounded-full bg-zinc-800/80 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${(completedCount / totalMatches) * 100}%` }}
-            />
-          </div>
-          {/* Per-group mini bars */}
-          <div className="grid grid-cols-6 gap-1 mt-3.5">
-            {GROUPS.map((g) => {
-              const gm = matches.filter((m) => m.group_letter === g);
-              const f = gm.filter(isMatchComplete).length;
-              const pct = f / 6;
-              return (
-                <div key={g} className="flex flex-col items-center gap-1">
-                  <div className="w-full h-8 bg-zinc-800/80 rounded-sm overflow-hidden relative">
+                return (
+                  <button
+                    key={g}
+                    onClick={() => setActiveGroup(g)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-left transition-colors",
+                      active
+                        ? "bg-zinc-900 border border-zinc-800"
+                        : "border border-transparent hover:bg-zinc-900/50",
+                    )}
+                  >
                     <div
-                      className="absolute bottom-0 left-0 right-0 transition-all duration-300"
+                      className={cn(
+                        "w-7 h-7 rounded-md flex items-center justify-center text-[12px] font-semibold",
+                        active
+                          ? "bg-zinc-100 text-zinc-950"
+                          : "bg-zinc-800 text-zinc-300",
+                      )}
+                    >
+                      {g}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className={cn(
+                          "text-[13px] font-medium",
+                          active ? "text-zinc-50" : "text-zinc-300",
+                        )}
+                      >
+                        Grupo {g}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {teamCodes.map((c) => (
+                          <TeamFlag key={c} code={c} size={14} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {viewMode === "own-open" && (
+                        <div className="text-[10.5px] text-zinc-500 tabular-nums">
+                          {filled}/6
+                        </div>
+                      )}
+                      {done && viewMode === "own-open" && (
+                        <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center bg-primary">
+                          <Check className="w-2.5 h-2.5 text-zinc-950" />
+                        </div>
+                      )}
+                      {viewMode !== "own-open" && (
+                        <Lock className="w-3.5 h-3.5 text-zinc-600" />
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+
+        {/* CENTER */}
+        <main className="flex-1 overflow-y-auto scrollbar-thin">
+          {activeSection === "groups" && (
+            <div className="px-6 xl:px-10 py-7 max-w-[920px]">
+              {/* Group header */}
+              <div className="flex items-baseline justify-between mb-1">
+                <div className="flex items-baseline gap-3">
+                  <h1 className="text-[32px] font-bold text-zinc-50 leading-none">
+                    Grupo {activeGroup}
+                  </h1>
+                  <div className="text-[13px] text-zinc-500">
+                    6 partidos · {groupFilled}/{groupMatches.length} completos
+                  </div>
+                </div>
+                {viewMode === "own-open" && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+                    <Lock className="w-3 h-3" />
+                    <span>Bloqueo: 11 jun 17:00</span>
+                  </div>
+                )}
+                {viewMode === "viewing-other" && (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium"
+                    style={{
+                      background: "rgba(168, 85, 247, 0.1)",
+                      borderColor: "rgba(168, 85, 247, 0.3)",
+                      color: "#A855F7",
+                    }}
+                  >
+                    <Eye className="w-3 h-3" />
+                    <span>Pronósticos de {targetDisplayName}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Teams strip */}
+              <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mt-4 mb-6">
+                {activeGroupTeams.map((t) => (
+                  <div
+                    key={t.code}
+                    className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 px-3 py-2.5 flex items-center gap-2.5"
+                  >
+                    <TeamFlag code={t.code} size={32} />
+                    <div className="leading-tight">
+                      <div className="text-[13px] text-zinc-100 font-medium">
+                        {t.name}
+                      </div>
+                      <div className="text-[10.5px] text-zinc-500">
+                        {t.code}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Matchdays */}
+              {[1, 2, 3].map((md) => {
+                const dayMatches = matchesByDay[md];
+                if (!dayMatches || dayMatches.length === 0) return null;
+                const firstDate = new Date(dayMatches[0].kickoff);
+                const dateStr = firstDate.toLocaleDateString("es-ES", {
+                  day: "numeric",
+                  month: "short",
+                });
+
+                return (
+                  <div key={md} className="mb-7">
+                    <div className="flex items-baseline gap-2 mb-2.5">
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
+                        Jornada {md}
+                      </div>
+                      <div className="text-[11px] text-zinc-600">{dateStr}</div>
+                    </div>
+                    <div className="grid grid-cols-1 3xl:grid-cols-2 gap-3">
+                      {dayMatches.map((match) => {
+                        const s = scores[match.id];
+                        const complete = isMatchComplete(match);
+                        const date = new Date(match.kickoff);
+                        const day = date.toLocaleDateString("es-ES", {
+                          day: "numeric",
+                          month: "short",
+                        });
+                        const time = date.toLocaleTimeString("es-ES", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+
+                        return (
+                          <div key={match.id}>
+                            <DesktopMatchCard
+                              match={match}
+                              homeScore={s?.home ?? null}
+                              awayScore={s?.away ?? null}
+                              complete={complete}
+                              day={day}
+                              time={time}
+                              disabled={disabled}
+                              onScoreChange={handleScoreChange}
+                              viewMode={viewMode}
+                            />
+                            {viewMode === "viewing-other" && ownScores && (
+                              <OwnPredictionLine
+                                homeScore={ownScores[match.id]?.home ?? null}
+                                awayScore={ownScores[match.id]?.away ?? null}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {viewMode === "own-open" &&
+                (activeGroup === "L" ? (
+                  <button
+                    onClick={goToBracket}
+                    className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                  >
+                    Continuar al bracket →
+                  </button>
+                ) : (
+                  <button
+                    onClick={goNextGroup}
+                    className="mt-2 w-full h-11 rounded-lg text-[14px] font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                  >
+                    Siguiente grupo →
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {activeSection === "bracket" &&
+            (!allGroupsComplete ? (
+              <SectionPlaceholder
+                section="bracket"
+                groupsComplete={false}
+                completedCount={completedCount}
+                totalMatches={totalMatches}
+                onGoToGroups={() => setActiveSection("groups")}
+              />
+            ) : thirdsRanking &&
+              thirdsRanking.tied.length > 0 &&
+              !thirdsResolved ? (
+              <ThirdsTiebreaker
+                autoQualified={thirdsRanking.autoQualified}
+                tiedTeams={thirdsRanking.tied}
+                neededCount={thirdsRanking.neededFromTied}
+                selected={selectedThirds}
+                onToggle={handleThirdToggle}
+              />
+            ) : bracketState ? (
+              <BracketDesktopView
+                bracketState={bracketState}
+                disabled={disabled}
+                onPickWinner={handleKnockoutPick}
+              />
+            ) : null)}
+
+          {activeSection === "extras" && (
+            <ExtrasSection
+              poolId={poolId}
+              extras={extras}
+              allTeams={allTeams}
+              disabled={disabled}
+              onExtraChange={handleExtraChange}
+              filledCount={extrasFilledCount}
+            />
+          )}
+
+          {activeSection === "admin" && isAdmin && (
+            <AdminExtrasSection
+              poolId={poolId}
+              results={adminExtras}
+              allTeams={allTeams}
+              onResultChange={handleAdminExtraChange}
+              filledCount={adminFilledCount}
+            />
+          )}
+        </main>
+
+        {/* RIGHT — standings & progress (only for groups) */}
+        {activeSection === "groups" && (
+          <aside className="w-[240px] xl:w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
+            <DesktopStandingsCard
+              groupId={activeGroup}
+              standings={standings}
+              viewMode={viewMode}
+            />
+
+            {/* Progress card (only own modes) */}
+            {viewMode !== "viewing-other" && (
+              <>
+                <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 mb-4">
+                  <div className="flex items-baseline justify-between mb-3">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
+                      Tu progreso
+                    </div>
+                    <div className="text-[11px] tabular-nums font-medium text-primary">
+                      {Math.round((completedCount / totalMatches) * 100)}%
+                    </div>
+                  </div>
+                  <div
+                    className="text-[28px] font-bold text-zinc-50 tabular-nums leading-none"
+                    style={{
+                      fontFamily: "var(--font-mono), ui-monospace, monospace",
+                    }}
+                  >
+                    {completedCount}
+                    <span className="text-zinc-600">/{totalMatches}</span>
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mb-3">
+                    partidos de fase de grupos
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-zinc-800/80 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-300"
                       style={{
-                        height: `${pct * 100}%`,
-                        background: f === 6 ? "var(--color-primary)" : "rgb(82 82 91)",
+                        width: `${(completedCount / totalMatches) * 100}%`,
                       }}
                     />
                   </div>
-                  <div className="text-[9.5px] text-zinc-500 tabular-nums">{g}</div>
+                  {/* Per-group mini bars */}
+                  <div className="grid grid-cols-6 gap-1 mt-3.5">
+                    {GROUPS.map((g) => {
+                      const gm = matches.filter((m) => m.group_letter === g);
+                      const f = gm.filter(isMatchComplete).length;
+                      const pct = f / 6;
+                      return (
+                        <div
+                          key={g}
+                          className="flex flex-col items-center gap-1"
+                        >
+                          <div className="w-full h-8 bg-zinc-800/80 rounded-sm overflow-hidden relative">
+                            <div
+                              className="absolute bottom-0 left-0 right-0 transition-all duration-300"
+                              style={{
+                                height: `${pct * 100}%`,
+                                background:
+                                  f === 6
+                                    ? "var(--color-primary)"
+                                    : "rgb(82 82 91)",
+                              }}
+                            />
+                          </div>
+                          <div className="text-[9.5px] text-zinc-500 tabular-nums">
+                            {g}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
-        <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 text-center">
-          Tus pronósticos son <span className="text-zinc-300">anónimos</span> hasta el 11 jun.
-        </p>
-        </>)}
+                <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 text-center">
+                  Tus pronósticos son{" "}
+                  <span className="text-zinc-300">anónimos</span> hasta el 11
+                  jun.
+                </p>
+              </>
+            )}
 
-        {/* VS. TU PORRA section (viewing-other) */}
-        {viewMode === "viewing-other" && ownScores && (
-          <DesktopComparisonCard
-            groupMatches={groupMatches}
-            theirScores={scores}
-            ownScores={ownScores}
-            activeGroup={activeGroup}
-            targetDisplayName={targetDisplayName}
-          />
+            {/* VS. TU PORRA section (viewing-other) */}
+            {viewMode === "viewing-other" && ownScores && (
+              <DesktopComparisonCard
+                groupMatches={groupMatches}
+                theirScores={scores}
+                ownScores={ownScores}
+                activeGroup={activeGroup}
+                targetDisplayName={targetDisplayName}
+              />
+            )}
+          </aside>
         )}
-      </aside>
-      )}
 
-      {/* Group tiebreak modal */}
-      {tiebreakModal && props.allStandings && (() => {
-        const s = props.allStandings[tiebreakModal.group];
-        if (!s) return null;
-        const tie = detectGroupTies(s);
-        if (!tie) return null;
-        return (
-          <GroupTiebreakModal
-            groupLetter={tiebreakModal.group}
-            tiedTeams={tie.teams}
-            tiedPositions={tie.positions}
-            onResolve={(ordered) => handleTiebreakResolve(tiebreakModal.group, ordered)}
-            onClose={() => setTiebreakModal(null)}
-          />
-        );
-      })()}
-    </div>
+        {/* Group tiebreak modal */}
+        {tiebreakModal &&
+          props.allStandings &&
+          (() => {
+            const s = props.allStandings[tiebreakModal.group];
+            if (!s) return null;
+            const tie = detectGroupTies(s);
+            if (!tie) return null;
+            return (
+              <GroupTiebreakModal
+                groupLetter={tiebreakModal.group}
+                tiedTeams={tie.teams}
+                tiedPositions={tie.positions}
+                onResolve={(ordered) =>
+                  handleTiebreakResolve(tiebreakModal.group, ordered)
+                }
+                onClose={() => setTiebreakModal(null)}
+              />
+            );
+          })()}
+      </div>
     </div>
   );
 }
@@ -1509,25 +1845,42 @@ function DesktopSectionItem({
       className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors"
       style={
         active
-          ? { background: hexAlpha(color, 0.10), border: `1px solid ${hexAlpha(color, 0.33)}` }
+          ? {
+              background: hexAlpha(color, 0.1),
+              border: `1px solid ${hexAlpha(color, 0.33)}`,
+            }
           : { border: "1px solid transparent" }
       }
     >
       <div
         className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
-        style={{ background: active ? hexAlpha(color, 0.16) : "rgb(39 39 42 / 0.6)" }}
+        style={{
+          background: active ? hexAlpha(color, 0.16) : "rgb(39 39 42 / 0.6)",
+        }}
       >
-        <span style={{ color: active ? color : "rgb(161 161 170)" }}>{icon}</span>
+        <span style={{ color: active ? color : "rgb(161 161 170)" }}>
+          {icon}
+        </span>
       </div>
-      <span className={cn("text-[13px] font-medium leading-tight flex-1", active ? "text-zinc-50" : "text-zinc-300")}>
+      <span
+        className={cn(
+          "text-[13px] font-medium leading-tight flex-1",
+          active ? "text-zinc-50" : "text-zinc-300",
+        )}
+      >
         {label}
       </span>
       {locked && <Lock className="w-2.5 h-2.5 text-zinc-600" />}
       <div
         className="text-[10.5px] tabular-nums flex items-center gap-1.5 shrink-0"
-        style={{ color: active ? color : "rgb(113 113 122)", fontFamily: "var(--font-mono), ui-monospace, monospace" }}
+        style={{
+          color: active ? color : "rgb(113 113 122)",
+          fontFamily: "var(--font-mono), ui-monospace, monospace",
+        }}
       >
-        <span>{filled}/{total}</span>
+        <span>
+          {filled}/{total}
+        </span>
         <span className="text-zinc-700">·</span>
         <span>{pct}%</span>
       </div>
@@ -1553,7 +1906,11 @@ function DesktopMatchCard({
   day: string;
   time: string;
   disabled: boolean;
-  onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
+  onScoreChange: (
+    matchId: string,
+    home: number | null,
+    away: number | null,
+  ) => void;
   viewMode?: ViewMode;
 }) {
   const handleHome = useCallback(
@@ -1562,7 +1919,7 @@ function DesktopMatchCard({
       const v = raw === "" ? null : Math.min(15, parseInt(raw, 10));
       onScoreChange(match.id, v, awayScore);
     },
-    [match.id, awayScore, onScoreChange]
+    [match.id, awayScore, onScoreChange],
   );
 
   const handleAway = useCallback(
@@ -1571,22 +1928,28 @@ function DesktopMatchCard({
       const v = raw === "" ? null : Math.min(15, parseInt(raw, 10));
       onScoreChange(match.id, homeScore, v);
     },
-    [match.id, homeScore, onScoreChange]
+    [match.id, homeScore, onScoreChange],
   );
 
   return (
     <div
       className={cn(
         "rounded-xl border bg-zinc-900/40 p-4 transition-colors",
-        complete ? "border-zinc-700" : "border-zinc-800/80"
+        complete ? "border-zinc-700" : "border-zinc-800/80",
       )}
     >
       <div className="flex items-center justify-between mb-3 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500">
-        <div>{day} · {time}</div>
+        <div>
+          {day} · {time}
+        </div>
       </div>
       <div className="flex items-center gap-2 xl:gap-4 3xl:gap-3">
         <div className="flex items-center gap-2 xl:gap-3 3xl:gap-2.5 flex-1 min-w-0">
-          <TeamFlag code={match.home_team_data.code} size={32} className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9" />
+          <TeamFlag
+            code={match.home_team_data.code}
+            size={32}
+            className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9"
+          />
           <div className="text-[13px] xl:text-[17px] 3xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.home_team_data.name}
           </div>
@@ -1620,10 +1983,13 @@ function DesktopMatchCard({
           <div className="text-[13px] xl:text-[17px] 3xl:text-[15px] text-zinc-100 font-medium truncate">
             {match.away_team_data.name}
           </div>
-          <TeamFlag code={match.away_team_data.code} size={32} className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9" />
+          <TeamFlag
+            code={match.away_team_data.code}
+            size={32}
+            className="shrink-0 xl:w-10 xl:h-10 3xl:w-9 3xl:h-9"
+          />
         </div>
       </div>
-
     </div>
   );
 }
@@ -1641,10 +2007,17 @@ function ViewingOtherHeader({
   targetUserId?: string;
   poolId: string;
 }) {
-  const otherPlayers = poolParticipants.filter((p) => p.userId !== targetUserId);
-  const currentIdx = poolParticipants.findIndex((p) => p.userId === targetUserId);
+  const otherPlayers = poolParticipants.filter(
+    (p) => p.userId !== targetUserId,
+  );
+  const currentIdx = poolParticipants.findIndex(
+    (p) => p.userId === targetUserId,
+  );
   const prevPlayer = currentIdx > 0 ? poolParticipants[currentIdx - 1] : null;
-  const nextPlayer = currentIdx < poolParticipants.length - 1 ? poolParticipants[currentIdx + 1] : null;
+  const nextPlayer =
+    currentIdx < poolParticipants.length - 1
+      ? poolParticipants[currentIdx + 1]
+      : null;
 
   return (
     <div className="px-4 py-2.5 border-b border-purple-500/20 bg-purple-500/8 flex items-center gap-2 shrink-0">
@@ -1655,7 +2028,9 @@ function ViewingOtherHeader({
         <ChevronLeft className="w-4 h-4" />
       </a>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-medium text-purple-300 truncate">{targetDisplayName}</div>
+        <div className="text-[12px] font-medium text-purple-300 truncate">
+          {targetDisplayName}
+        </div>
         <div className="text-[10px] text-purple-400/60">Viendo su porra</div>
       </div>
       <div className="flex items-center gap-1">
@@ -1694,7 +2069,10 @@ function OwnPredictionLine({
       <span className="text-zinc-600 text-[8px]">●</span>
       <span className="text-zinc-500">Tu pronóstico</span>
       {hasPrediction ? (
-        <span className="text-zinc-400 tabular-nums font-medium" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+        <span
+          className="text-zinc-400 tabular-nums font-medium"
+          style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
+        >
           {homeScore} – {awayScore}
         </span>
       ) : (
@@ -1713,9 +2091,14 @@ function DesktopPlayerNav({
   targetUserId?: string;
   poolId: string;
 }) {
-  const currentIdx = poolParticipants.findIndex((p) => p.userId === targetUserId);
+  const currentIdx = poolParticipants.findIndex(
+    (p) => p.userId === targetUserId,
+  );
   const prevPlayer = currentIdx > 0 ? poolParticipants[currentIdx - 1] : null;
-  const nextPlayer = currentIdx < poolParticipants.length - 1 ? poolParticipants[currentIdx + 1] : null;
+  const nextPlayer =
+    currentIdx < poolParticipants.length - 1
+      ? poolParticipants[currentIdx + 1]
+      : null;
 
   return (
     <div className="rounded-xl border border-purple-500/30 bg-purple-500/8 p-3 mb-4">
@@ -1729,18 +2112,26 @@ function DesktopPlayerNav({
             className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <ChevronLeft className="w-3 h-3" />
-            <span className="truncate max-w-[70px]">{prevPlayer.displayName}</span>
+            <span className="truncate max-w-[70px]">
+              {prevPlayer.displayName}
+            </span>
           </a>
-        ) : <span />}
+        ) : (
+          <span />
+        )}
         {nextPlayer ? (
           <a
             href={`/pools/${poolId}/predictions?player=${nextPlayer.userId}`}
             className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
           >
-            <span className="truncate max-w-[70px]">{nextPlayer.displayName}</span>
+            <span className="truncate max-w-[70px]">
+              {nextPlayer.displayName}
+            </span>
             <ChevronRight className="w-3 h-3" />
           </a>
-        ) : <span />}
+        ) : (
+          <span />
+        )}
       </div>
       <a
         href={`/pools/${poolId}/predictions`}
@@ -1773,7 +2164,13 @@ function DesktopComparisonCard({
     const theirs = theirScores[m.id];
     const mine = ownScores[m.id];
     if (!theirs || !mine) continue;
-    if (theirs.home === null || theirs.away === null || mine.home === null || mine.away === null) continue;
+    if (
+      theirs.home === null ||
+      theirs.away === null ||
+      mine.home === null ||
+      mine.away === null
+    )
+      continue;
     total++;
     if (theirs.home === mine.home && theirs.away === mine.away) {
       exact++;
@@ -1792,30 +2189,58 @@ function DesktopComparisonCard({
       </div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
-          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">Marcadores exactos</div>
+          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">
+            Marcadores exactos
+          </div>
           <div className="flex items-baseline gap-0.5">
-            <span className="text-[22px] font-bold text-zinc-50 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+            <span
+              className="text-[22px] font-bold text-zinc-50 tabular-nums"
+              style={{
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
               {exact}
             </span>
-            <span className="text-[13px] text-zinc-600 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+            <span
+              className="text-[13px] text-zinc-600 tabular-nums"
+              style={{
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
               /{total}
             </span>
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
-          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">Mismo signo</div>
+          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">
+            Mismo signo
+          </div>
           <div className="flex items-baseline gap-0.5">
-            <span className="text-[22px] font-bold text-purple-300 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+            <span
+              className="text-[22px] font-bold text-purple-300 tabular-nums"
+              style={{
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
               {sameSign}
             </span>
-            <span className="text-[13px] text-zinc-600 tabular-nums" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+            <span
+              className="text-[13px] text-zinc-600 tabular-nums"
+              style={{
+                fontFamily: "var(--font-mono), ui-monospace, monospace",
+              }}
+            >
               /{total}
             </span>
           </div>
         </div>
       </div>
       <div className="text-[11px] text-zinc-500 leading-relaxed">
-        {targetDisplayName} apostó parecido a ti en este grupo en <span className="text-zinc-300 font-medium">{sameSign} de {total}</span> partidos.
+        {targetDisplayName} apostó parecido a ti en este grupo en{" "}
+        <span className="text-zinc-300 font-medium">
+          {sameSign} de {total}
+        </span>{" "}
+        partidos.
       </div>
     </div>
   );
@@ -1848,13 +2273,17 @@ function DesktopStandingsCard({
         <div className="text-right">
           {provisional ? (
             <>
-              <div className="text-[10.5px] text-zinc-500 tabular-nums">{counted}/{total}</div>
+              <div className="text-[10.5px] text-zinc-500 tabular-nums">
+                {counted}/{total}
+              </div>
               {counted > 0 && (
                 <div className="text-[10px] text-amber-400/80">Provisional</div>
               )}
             </>
           ) : (
-            <div className="text-[10px] font-medium text-primary">Definitiva</div>
+            <div className="text-[10px] font-medium text-primary">
+              Definitiva
+            </div>
           )}
         </div>
       </div>
@@ -1874,16 +2303,25 @@ function DesktopStandingsCard({
               <tr className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500">
                 <th className="text-left font-medium pl-3 py-1.5 w-5">#</th>
                 <th className="text-left font-medium py-1.5">Equipo</th>
-                <th className="text-right font-medium px-1.5 tabular-nums w-7">PJ</th>
-                <th className="text-right font-medium px-1.5 tabular-nums w-9">DG</th>
-                <th className="text-right font-medium pr-3 tabular-nums w-9">PTS</th>
+                <th className="text-right font-medium px-1.5 tabular-nums w-7">
+                  PJ
+                </th>
+                <th className="text-right font-medium px-1.5 tabular-nums w-9">
+                  DG
+                </th>
+                <th className="text-right font-medium pr-3 tabular-nums w-9">
+                  PTS
+                </th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => {
                 const passes = i < 2;
                 return (
-                  <tr key={r.code} className="border-t border-zinc-800/60 align-middle">
+                  <tr
+                    key={r.code}
+                    className="border-t border-zinc-800/60 align-middle"
+                  >
                     <td className="pl-3 py-2">
                       <div className="flex items-center gap-1">
                         <span
@@ -1893,21 +2331,34 @@ function DesktopStandingsCard({
                               ? provisional
                                 ? "bg-primary opacity-40"
                                 : "bg-primary"
-                              : "opacity-0"
+                              : "opacity-0",
                           )}
                         />
-                        <span className="text-zinc-500 tabular-nums">{i + 1}</span>
+                        <span className="text-zinc-500 tabular-nums">
+                          {i + 1}
+                        </span>
                       </div>
                     </td>
                     <td className="py-2 pl-2 text-zinc-100 max-w-0 overflow-hidden">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <TeamFlag code={r.code} size={16} className="shrink-0" />
-                        <span className={cn("text-[11.5px] truncate", r.pj > 0 ? "" : "text-zinc-500")}>
+                        <TeamFlag
+                          code={r.code}
+                          size={16}
+                          className="shrink-0"
+                        />
+                        <span
+                          className={cn(
+                            "text-[11.5px] truncate",
+                            r.pj > 0 ? "" : "text-zinc-500",
+                          )}
+                        >
                           {r.name}
                         </span>
                       </div>
                     </td>
-                    <td className="text-right text-zinc-400 tabular-nums px-1.5">{r.pj}</td>
+                    <td className="text-right text-zinc-400 tabular-nums px-1.5">
+                      {r.pj}
+                    </td>
                     <td className="text-right text-zinc-400 tabular-nums px-1.5">
                       {r.gd > 0 ? `+${r.gd}` : r.gd}
                     </td>

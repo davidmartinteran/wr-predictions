@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getUser, getPool } from "@/lib/supabase/queries";
 import { LeaderboardClient } from "./leaderboard-client";
 
 type ScoreRow = {
@@ -51,22 +52,23 @@ export default async function LeaderboardPage({
   params: Promise<{ poolId: string }>;
 }) {
   const { poolId } = await params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const user = await getUser();
   if (!user) notFound();
 
-  const [
-    { data: pool },
-    { data: participants },
-    { data: scoreRows },
-  ] = await Promise.all([
-    supabase.from("pools").select("name, status, deadline").eq("id", poolId).maybeSingle(),
-    supabase.from("participations").select("user_id, display_name").eq("pool_id", poolId),
-    supabase.from("scores").select("user_id, category, points, exact_hits").eq("pool_id", poolId),
-  ]);
+  const supabase = await createClient();
+  const [pool, { data: participants }, { data: scoreRows }] = await Promise.all(
+    [
+      getPool(poolId),
+      supabase
+        .from("participations")
+        .select("user_id, display_name")
+        .eq("pool_id", poolId),
+      supabase
+        .from("scores")
+        .select("user_id, category, points, exact_hits")
+        .eq("pool_id", poolId),
+    ],
+  );
 
   if (!pool) notFound();
 
@@ -112,20 +114,24 @@ export default async function LeaderboardPage({
     };
   });
 
-  players.sort((a, b) => b.scores.TOTAL - a.scores.TOTAL || b.exactHits - a.exactHits);
+  players.sort(
+    (a, b) => b.scores.TOTAL - a.scores.TOTAL || b.exactHits - a.exactHits,
+  );
 
-  const isLive = pool?.status === "LIVE" || pool?.status === "REVEALED";
-  const isPastDeadline = pool?.deadline ? new Date(pool.deadline) < new Date() : false;
+  const isLive = pool.status === "LIVE" || pool.status === "REVEALED";
+  const isPastDeadline = pool.deadline
+    ? new Date(pool.deadline) < new Date()
+    : false;
 
   return (
     <LeaderboardClient
       poolId={poolId}
-      poolName={pool?.name ?? "Porra"}
+      poolName={pool.name}
       players={players}
       playerCount={players.length}
       isLive={isLive}
       canViewOthers={isPastDeadline}
-      deadline={pool?.deadline ?? ""}
+      deadline={pool.deadline}
     />
   );
 }
