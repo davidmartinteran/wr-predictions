@@ -211,7 +211,7 @@ export function PredictionsSkeleton() {
         <div className="flex flex-col h-full min-h-0">
           <div className="flex flex-1 min-h-0">
             {/* LEFT sidebar */}
-            <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
+            <aside className="w-55 xl:w-65 border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
               <div className="p-5 border-b border-zinc-800/80">
                 <Skeleton className="h-3 w-40" />
               </div>
@@ -237,7 +237,7 @@ export function PredictionsSkeleton() {
 
             {/* CENTER */}
             <main className="flex-1 overflow-y-auto">
-              <div className="px-6 xl:px-10 py-7 max-w-[920px]">
+              <div className="px-6 xl:px-10 py-7 max-w-230">
                 {/* Group header */}
                 <div className="flex items-baseline justify-between mb-1">
                   <div className="flex items-baseline gap-3">
@@ -283,7 +283,7 @@ export function PredictionsSkeleton() {
             </main>
 
             {/* RIGHT sidebar */}
-            <aside className="w-[240px] xl:w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5">
+            <aside className="w-60 xl:w-70 border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5">
               {/* Standings card skeleton */}
               <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 mb-4">
                 <Skeleton className="h-4 w-20 mb-3" />

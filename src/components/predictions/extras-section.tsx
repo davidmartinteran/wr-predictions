@@ -37,7 +37,7 @@ export function ExtrasSection({ poolId, extras, allTeams, disabled, onExtraChang
   const isComplete = filledCount === EXTRAS_TOTAL;
 
   return (
-    <div className="px-4 lg:px-6 xl:px-10 pt-3 lg:py-7 pb-52 lg:pb-10 lg:max-w-[920px]">
+    <div className="px-4 lg:px-6 xl:px-10 pt-3 lg:py-7 pb-52 lg:pb-10 lg:max-w-230">
       {/* Header */}
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-[17px] lg:text-[32px] font-bold text-zinc-50 leading-none">
@@ -252,7 +252,7 @@ function PlayerCard({
         )}
 
         {open && results.length > 0 && (
-          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl max-h-[280px] overflow-y-auto scrollbar-thin">
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl max-h-70 overflow-y-auto scrollbar-thin">
             {results.map((player) => (
               <button
                 key={`${kind}-${player.name}-${player.code}`}
@@ -345,7 +345,7 @@ function TeamCard({
         )}
 
         {open && (
-          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl max-h-[320px] overflow-hidden flex flex-col">
+          <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl max-h-80 overflow-hidden flex flex-col">
             <div className="p-2 border-b border-zinc-800/80">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />

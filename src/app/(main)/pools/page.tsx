@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Trophy, Users, Ticket, List } from "lucide-react";
+import { Plus, Trophy, Users, Ticket } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { CodeForm } from "@/app/(main)/welcome/code-form";

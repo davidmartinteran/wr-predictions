@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
-import { ProgressBar } from "@/components/predictions/progress-bar";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
 import {
   savePrediction,
@@ -53,7 +52,6 @@ import {
   buildBracketState,
   cascadeInvalidation,
   type BracketState,
-  type ThirdPlaceTeam,
 } from "@/lib/bracket/engine";
 import { TOTAL_BRACKET_PICKS, type Stage } from "@/lib/bracket/mapping";
 import { detectGroupTies } from "@/lib/bracket/standings";
@@ -430,6 +428,9 @@ export function PredictionsClient({
 
   // Clear all knockout picks when R32 teams change (group results altered qualified teams)
   const prevR32Hash = useRef<string>("");
+  const knockoutPicksRef = useRef(knockoutPicks);
+  // eslint-disable-next-line react-hooks/refs -- sync ref for use in sibling effect
+  knockoutPicksRef.current = knockoutPicks;
   useEffect(() => {
     if (!bracketState) return;
     const hash = bracketState.matches.R32.map(
@@ -438,7 +439,7 @@ export function PredictionsClient({
     if (prevR32Hash.current && prevR32Hash.current !== hash) {
       setKnockoutPicks({});
       startTransition(async () => {
-        const allPicks = Object.keys(knockoutPicks).map((k) => {
+        const allPicks = Object.keys(knockoutPicksRef.current).map((k) => {
           const [stage, slot] = k.split(":");
           return { stage: stage as Stage, slot: Number(slot) };
         });
@@ -558,7 +559,7 @@ export function PredictionsClient({
       }
       prevStandingsHash.current[g] = hash;
     }
-  }, [scores, groupComplete, matches]);
+  }, [scores, groupComplete, matches, poolId]);
 
   // Auto-trigger group tiebreak modal when a complete group has a tie without resolution (only in own-open)
   const pendingTiebreakGroup = useMemo(() => {
@@ -576,6 +577,7 @@ export function PredictionsClient({
 
   useEffect(() => {
     if (pendingTiebreakGroup) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: auto-open modal from derived state
       setTiebreakModal({ group: pendingTiebreakGroup });
     }
   }, [pendingTiebreakGroup]);
@@ -641,7 +643,6 @@ export function PredictionsClient({
     handleKnockoutPick,
     handleThirdToggle,
     groupTiebreaks,
-    setGroupTiebreaks,
     tiebreakModal,
     setTiebreakModal,
     handleTiebreakResolve,
@@ -714,9 +715,6 @@ type LayoutProps = {
   handleKnockoutPick: (stage: Stage, slot: number, teamId: string) => void;
   handleThirdToggle: (teamId: string) => void;
   groupTiebreaks: Record<string, string[]>;
-  setGroupTiebreaks: React.Dispatch<
-    React.SetStateAction<Record<string, string[]>>
-  >;
   tiebreakModal: { group: string } | null;
   setTiebreakModal: React.Dispatch<
     React.SetStateAction<{ group: string } | null>
@@ -770,7 +768,6 @@ function MobileLayout(props: LayoutProps) {
     handleThirdToggle,
     tiebreakModal,
     setTiebreakModal,
-    setGroupTiebreaks,
     handleTiebreakResolve,
     viewMode,
     ownScores,
@@ -905,7 +902,7 @@ function MobileLayout(props: LayoutProps) {
                       </span>
                     )}
                     {active && (
-                      <span className="absolute left-2 right-2 -bottom-px h-[2px] rounded-full bg-zinc-50" />
+                      <span className="absolute left-2 right-2 -bottom-px h-0.5 rounded-full bg-zinc-50" />
                     )}
                   </button>
                 );
@@ -1162,7 +1159,7 @@ function SectionPlaceholder({
       </div>
       <div>
         <h2 className="text-[17px] font-semibold text-zinc-50 mb-1">{title}</h2>
-        <p className="text-[13px] text-zinc-500 leading-relaxed max-w-[280px]">
+        <p className="text-[13px] text-zinc-500 leading-relaxed max-w-70">
           {description}
         </p>
       </div>
@@ -1225,7 +1222,6 @@ function DesktopLayout(
     handleThirdToggle,
     tiebreakModal,
     setTiebreakModal,
-    setGroupTiebreaks,
     handleTiebreakResolve,
     viewMode,
     ownScores,
@@ -1363,7 +1359,7 @@ function DesktopLayout(
 
       <div className="flex flex-1 min-h-0">
         {/* LEFT — sidebar */}
-        <aside className="w-[220px] xl:w-[260px] border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
+        <aside className="w-55 xl:w-65 border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">
           <div className="p-5 border-b border-zinc-800/80">
             <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-1">
               Pronósticos · Mundial 2026
@@ -1518,7 +1514,7 @@ function DesktopLayout(
         {/* CENTER */}
         <main className="flex-1 overflow-y-auto scrollbar-thin">
           {activeSection === "groups" && (
-            <div className="px-6 xl:px-10 py-7 max-w-[920px]">
+            <div className="px-6 xl:px-10 py-7 max-w-230">
               {/* Group header */}
               <div className="flex items-baseline justify-between mb-1">
                 <div className="flex items-baseline gap-3">
@@ -1613,7 +1609,6 @@ function DesktopLayout(
                               time={time}
                               disabled={disabled}
                               onScoreChange={handleScoreChange}
-                              viewMode={viewMode}
                             />
                             {viewMode === "viewing-other" && ownScores && (
                               <OwnPredictionLine
@@ -1699,7 +1694,7 @@ function DesktopLayout(
 
         {/* RIGHT — standings & progress (only for groups) */}
         {activeSection === "groups" && (
-          <aside className="w-[240px] xl:w-[280px] border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
+          <aside className="w-60 xl:w-70 border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
             <DesktopStandingsCard
               groupId={activeGroup}
               standings={standings}
@@ -1897,7 +1892,6 @@ function DesktopMatchCard({
   time,
   disabled,
   onScoreChange,
-  viewMode,
 }: {
   match: Match;
   homeScore: number | null;
@@ -1911,7 +1905,6 @@ function DesktopMatchCard({
     home: number | null,
     away: number | null,
   ) => void;
-  viewMode?: ViewMode;
 }) {
   const handleHome = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1963,7 +1956,7 @@ function DesktopMatchCard({
             placeholder="–"
             onChange={handleHome}
             disabled={disabled}
-            className="w-[44px] h-[44px] xl:w-[52px] xl:h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-11 h-11 xl:w-13 xl:h-13 rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
           />
           <span className="text-zinc-700">:</span>
@@ -1975,7 +1968,7 @@ function DesktopMatchCard({
             placeholder="–"
             onChange={handleAway}
             disabled={disabled}
-            className="w-[44px] h-[44px] xl:w-[52px] xl:h-[52px] rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="w-11 h-11 xl:w-13 xl:h-13 rounded-lg bg-zinc-950 border border-zinc-800 text-center text-[22px] xl:text-[26px] font-bold tabular-nums text-zinc-50 placeholder:text-zinc-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}
           />
         </div>
@@ -2007,9 +2000,6 @@ function ViewingOtherHeader({
   targetUserId?: string;
   poolId: string;
 }) {
-  const otherPlayers = poolParticipants.filter(
-    (p) => p.userId !== targetUserId,
-  );
   const currentIdx = poolParticipants.findIndex(
     (p) => p.userId === targetUserId,
   );
@@ -2082,67 +2072,6 @@ function OwnPredictionLine({
   );
 }
 
-function DesktopPlayerNav({
-  poolParticipants,
-  targetUserId,
-  poolId,
-}: {
-  poolParticipants: PoolParticipant[];
-  targetUserId?: string;
-  poolId: string;
-}) {
-  const currentIdx = poolParticipants.findIndex(
-    (p) => p.userId === targetUserId,
-  );
-  const prevPlayer = currentIdx > 0 ? poolParticipants[currentIdx - 1] : null;
-  const nextPlayer =
-    currentIdx < poolParticipants.length - 1
-      ? poolParticipants[currentIdx + 1]
-      : null;
-
-  return (
-    <div className="rounded-xl border border-purple-500/30 bg-purple-500/8 p-3 mb-4">
-      <div className="text-[10px] uppercase tracking-[0.12em] text-purple-400 font-medium mb-2">
-        Navegando porras
-      </div>
-      <div className="flex items-center justify-between">
-        {prevPlayer ? (
-          <a
-            href={`/pools/${poolId}/predictions?player=${prevPlayer.userId}`}
-            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <ChevronLeft className="w-3 h-3" />
-            <span className="truncate max-w-[70px]">
-              {prevPlayer.displayName}
-            </span>
-          </a>
-        ) : (
-          <span />
-        )}
-        {nextPlayer ? (
-          <a
-            href={`/pools/${poolId}/predictions?player=${nextPlayer.userId}`}
-            className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            <span className="truncate max-w-[70px]">
-              {nextPlayer.displayName}
-            </span>
-            <ChevronRight className="w-3 h-3" />
-          </a>
-        ) : (
-          <span />
-        )}
-      </div>
-      <a
-        href={`/pools/${poolId}/predictions`}
-        className="mt-2 block text-center text-[10.5px] text-purple-400 hover:text-purple-300 transition-colors"
-      >
-        ← Volver a mi porra
-      </a>
-    </div>
-  );
-}
-
 function DesktopComparisonCard({
   groupMatches,
   theirScores,
@@ -2189,7 +2118,7 @@ function DesktopComparisonCard({
       </div>
       <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
-          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">
+          <div className="text-[9.5px] uppercase tracking-widest text-zinc-500 font-medium mb-1">
             Marcadores exactos
           </div>
           <div className="flex items-baseline gap-0.5">
@@ -2212,7 +2141,7 @@ function DesktopComparisonCard({
           </div>
         </div>
         <div className="rounded-lg border border-zinc-800/60 bg-zinc-950/40 p-3">
-          <div className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500 font-medium mb-1">
+          <div className="text-[9.5px] uppercase tracking-widest text-zinc-500 font-medium mb-1">
             Mismo signo
           </div>
           <div className="flex items-baseline gap-0.5">
@@ -2300,7 +2229,7 @@ function DesktopStandingsCard({
         <>
           <table className="w-full text-[11.5px]">
             <thead>
-              <tr className="text-[9.5px] uppercase tracking-[0.1em] text-zinc-500">
+              <tr className="text-[9.5px] uppercase tracking-widest text-zinc-500">
                 <th className="text-left font-medium pl-3 py-1.5 w-5">#</th>
                 <th className="text-left font-medium py-1.5">Equipo</th>
                 <th className="text-right font-medium px-1.5 tabular-nums w-7">
