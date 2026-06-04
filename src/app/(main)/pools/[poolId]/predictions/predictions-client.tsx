@@ -429,8 +429,9 @@ export function PredictionsClient({
   // Clear all knockout picks when R32 teams change (group results altered qualified teams)
   const prevR32Hash = useRef<string>("");
   const knockoutPicksRef = useRef(knockoutPicks);
-  // eslint-disable-next-line react-hooks/refs -- sync ref for use in sibling effect
-  knockoutPicksRef.current = knockoutPicks;
+  useEffect(() => {
+    knockoutPicksRef.current = knockoutPicks;
+  }, [knockoutPicks]);
   useEffect(() => {
     if (!bracketState) return;
     const hash = bracketState.matches.R32.map(
@@ -1008,7 +1009,6 @@ function MobileLayout(props: LayoutProps) {
       {activeSection === "extras" && (
         <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
           <ExtrasSection
-            poolId={poolId}
             extras={extras}
             allTeams={allTeams}
             disabled={disabled}
@@ -1672,7 +1672,6 @@ function DesktopLayout(
 
           {activeSection === "extras" && (
             <ExtrasSection
-              poolId={poolId}
               extras={extras}
               allTeams={allTeams}
               disabled={disabled}

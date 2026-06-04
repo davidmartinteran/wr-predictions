@@ -13,7 +13,6 @@ type Team = {
 };
 
 type ExtrasSectionProps = {
-  poolId: string;
   extras: Record<string, string>;
   allTeams: Team[];
   disabled: boolean;
@@ -33,7 +32,7 @@ const EXTRA_CARDS = [
 
 export const EXTRAS_TOTAL = 7;
 
-export function ExtrasSection({ poolId, extras, allTeams, disabled, onExtraChange, filledCount }: ExtrasSectionProps) {
+export function ExtrasSection({ extras, allTeams, disabled, onExtraChange, filledCount }: ExtrasSectionProps) {
   const isComplete = filledCount === EXTRAS_TOTAL;
 
   return (
