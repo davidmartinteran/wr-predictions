@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
@@ -23,6 +23,11 @@ export function GroupTiebreakModal({
 }: Props) {
   const [order, setOrder] = useState<string[]>([]);
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
   const handlePick = (teamId: string) => {
     if (order.includes(teamId)) {
       setOrder(order.filter((id) => id !== teamId));
@@ -40,7 +45,7 @@ export function GroupTiebreakModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 touch-none" onClick={onClose} />
       <div className="relative w-full max-w-sm mx-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5 animate-in fade-in zoom-in-95 duration-200">
         <button
           onClick={onClose}
