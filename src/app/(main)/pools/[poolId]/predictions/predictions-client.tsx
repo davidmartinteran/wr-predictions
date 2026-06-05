@@ -578,6 +578,7 @@ export function PredictionsClient({
 
   useEffect(() => {
     if (pendingTiebreakGroup) {
+      (document.activeElement as HTMLElement)?.blur();
       setActiveGroup(pendingTiebreakGroup);
       setActiveSection("groups");
       setTiebreakModal({ group: pendingTiebreakGroup });
