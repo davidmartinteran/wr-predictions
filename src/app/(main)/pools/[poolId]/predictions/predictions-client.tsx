@@ -578,7 +578,8 @@ export function PredictionsClient({
 
   useEffect(() => {
     if (pendingTiebreakGroup) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: auto-open modal from derived state
+      setActiveGroup(pendingTiebreakGroup);
+      setActiveSection("groups");
       setTiebreakModal({ group: pendingTiebreakGroup });
     }
   }, [pendingTiebreakGroup]);
@@ -647,7 +648,6 @@ export function PredictionsClient({
     tiebreakModal,
     setTiebreakModal,
     handleTiebreakResolve,
-    allStandings,
     viewMode,
     ownScores,
     targetDisplayName,
@@ -721,7 +721,6 @@ type LayoutProps = {
     React.SetStateAction<{ group: string } | null>
   >;
   handleTiebreakResolve: (group: string, ordered: string[]) => void;
-  allStandings: Record<string, ReturnType<typeof computeStandings>> | null;
   viewMode: ViewMode;
   ownScores: Record<
     string,
@@ -745,6 +744,7 @@ function MobileLayout(props: LayoutProps) {
     activeGroup,
     setActiveGroup,
     groupMatches,
+    matches,
     scores,
     completedCount,
     totalMatches,
@@ -1031,10 +1031,8 @@ function MobileLayout(props: LayoutProps) {
 
       {/* Group tiebreak modal */}
       {tiebreakModal &&
-        props.allStandings &&
         (() => {
-          const s = props.allStandings[tiebreakModal.group];
-          if (!s) return null;
+          const s = computeStandings(tiebreakModal.group, matches, scores);
           const tie = detectGroupTies(s);
           if (!tie) return null;
           return (
@@ -1787,10 +1785,8 @@ function DesktopLayout(
 
         {/* Group tiebreak modal */}
         {tiebreakModal &&
-          props.allStandings &&
           (() => {
-            const s = props.allStandings[tiebreakModal.group];
-            if (!s) return null;
+            const s = computeStandings(tiebreakModal.group, matches, scores);
             const tie = detectGroupTies(s);
             if (!tie) return null;
             return (

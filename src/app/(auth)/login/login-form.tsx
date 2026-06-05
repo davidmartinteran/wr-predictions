@@ -91,7 +91,7 @@ export function LoginForm({ next, invitePool }: Props) {
   );
 
   const handleVerifyOtp = useCallback(() => {
-    if (otp.length !== 6) return;
+    if (otp.length !== 8) return;
     setError(null);
     startTransition(async () => {
       const supabase = createClient();
@@ -137,7 +137,7 @@ export function LoginForm({ next, invitePool }: Props) {
         <div>
           <h2 className="text-lg font-semibold">Introduce el código</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Hemos enviado un código de 6 dígitos a
+            Hemos enviado un código de 8 dígitos a
           </p>
           <p className="mt-0.5 text-sm font-medium">{email}</p>
         </div>
@@ -147,11 +147,11 @@ export function LoginForm({ next, invitePool }: Props) {
             ref={otpRef}
             type="tel"
             inputMode="numeric"
-            maxLength={6}
-            placeholder="000000"
+            maxLength={8}
+            placeholder="00000000"
             value={otp}
             onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+              const v = e.target.value.replace(/\D/g, "").slice(0, 8);
               setOtp(v);
             }}
             className="h-14 text-center text-2xl font-mono font-bold tracking-[0.3em] bg-zinc-900/40 border-zinc-800/80"
@@ -160,7 +160,7 @@ export function LoginForm({ next, invitePool }: Props) {
 
           <Button
             onClick={handleVerifyOtp}
-            disabled={otp.length !== 6 || isPending}
+            disabled={otp.length !== 8 || isPending}
             className="w-full h-11 md:h-[52px] text-base font-medium"
           >
             {isPending ? "Verificando..." : "Entrar"}
