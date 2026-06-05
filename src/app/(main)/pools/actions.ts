@@ -9,6 +9,7 @@ const createPoolSchema = z.object({
   name: z.string().trim().min(2, "Mínimo 2 caracteres").max(60),
   tournament_id: z.string().uuid(),
   deadline: z.string().datetime(),
+  display_name: z.string().trim().min(2, "Mínimo 2 caracteres").max(40),
 });
 
 const joinPoolSchema = z.object({
@@ -47,6 +48,12 @@ export async function createPool(input: z.infer<typeof createPoolSchema>) {
     console.error("createPool error:", error);
     return { error: "No se pudo crear la porra" };
   }
+
+  await supabase
+    .from("participations")
+    .update({ display_name: parsed.data.display_name })
+    .eq("pool_id", pool.id)
+    .eq("user_id", user.id);
 
   revalidatePath("/pools");
   return { success: true, id: pool.id, invite_code: pool.invite_code };

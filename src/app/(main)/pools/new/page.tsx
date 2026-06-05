@@ -5,6 +5,9 @@ import { NewPoolForm } from "./new-pool-form";
 
 export default async function NewPoolPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const defaultDisplayName = user?.email?.split("@")[0] ?? "";
+
   const { data: tournaments } = await supabase
     .from("tournaments")
     .select("id, name, code, starts_at")
@@ -31,7 +34,7 @@ export default async function NewPoolPage() {
       </p>
 
       <div className="mt-8 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-6">
-        <NewPoolForm tournaments={opts} />
+        <NewPoolForm tournaments={opts} defaultDisplayName={defaultDisplayName} />
       </div>
     </main>
   );

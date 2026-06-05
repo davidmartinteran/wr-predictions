@@ -196,9 +196,9 @@ function PlayerCard({
 
   const results = useMemo(() => {
     if (query.length < 2) return [];
-    const q = query.toLowerCase();
+    const q = query.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     return PLAYERS
-      .filter((p) => p.name.toLowerCase().includes(q))
+      .filter((p) => p.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q))
       .slice(0, 8);
   }, [query]);
 
@@ -311,8 +311,8 @@ function TeamCard({
 
   const filtered = useMemo(() => {
     if (!search) return teams;
-    const q = search.toLowerCase();
-    return teams.filter((t) => t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q));
+    const q = search.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return teams.filter((t) => t.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").includes(q) || t.code.toLowerCase().includes(q));
   }, [teams, search]);
 
   const selectedTeam = value ? teams.find((t) => t.code === value) : null;

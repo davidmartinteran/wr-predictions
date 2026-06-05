@@ -15,10 +15,12 @@ type TournamentOption = {
 
 type Props = {
   tournaments: TournamentOption[];
+  defaultDisplayName: string;
 };
 
-export function NewPoolForm({ tournaments }: Props) {
+export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
   const [name, setName] = useState("");
+  const [displayName, setDisplayName] = useState(defaultDisplayName);
   const [tournamentId, setTournamentId] = useState(tournaments[0]?.id ?? "");
   const [deadline, setDeadline] = useState(() => {
     const t = tournaments[0];
@@ -44,6 +46,7 @@ export function NewPoolForm({ tournaments }: Props) {
         name,
         tournament_id: tournamentId,
         deadline: deadlineIso,
+        display_name: displayName,
       });
       if ("error" in res && res.error) {
         setError(res.error);
@@ -100,8 +103,23 @@ export function NewPoolForm({ tournaments }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
+        <label htmlFor="display_name" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Tu nombre en la porra
+        </label>
+        <Input
+          id="display_name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          required
+          minLength={2}
+          maxLength={40}
+          className="mt-2 h-11 bg-zinc-950 border-zinc-800/80"
+        />
+      </div>
+
+      <div>
         <label htmlFor="name" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Nombre
+          Nombre de la porra
         </label>
         <Input
           id="name"
