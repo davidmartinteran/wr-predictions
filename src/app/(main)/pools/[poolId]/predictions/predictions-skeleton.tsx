@@ -149,7 +149,7 @@ export function PredictionsSkeleton() {
     <>
       {/* ─── Mobile ─── */}
       <div className="contents lg:hidden">
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col flex-1 min-h-0">
           {/* Header */}
           <div className="px-5 pt-2 pb-3 border-b border-zinc-800/80 shrink-0">
             <div className="flex items-center justify-between mb-3">
@@ -208,7 +208,7 @@ export function PredictionsSkeleton() {
 
       {/* ─── Desktop ─── */}
       <div className="hidden lg:contents">
-        <div className="flex flex-col h-full min-h-0">
+        <div className="flex flex-col flex-1 min-h-0 min-h-0">
           <div className="flex flex-1 min-h-0">
             {/* LEFT sidebar */}
             <aside className="w-55 xl:w-65 border-r border-zinc-800/80 bg-zinc-950 shrink-0 flex flex-col">

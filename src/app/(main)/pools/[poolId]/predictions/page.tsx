@@ -36,7 +36,7 @@ export default async function PredictionsPage({
       : "own-open";
 
   return (
-    <div className="overflow-y-auto h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       <Suspense fallback={<PredictionsSkeleton />}>
         <PredictionsLoader
           poolId={poolId}
