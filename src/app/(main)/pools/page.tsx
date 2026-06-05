@@ -160,7 +160,7 @@ export default async function PoolsListPage() {
                               )}
                             </div>
                           </div>
-                          <CopyCodeButton code={r.pools.invite_code} />
+                          <CopyCodeButton inviteCode={r.pools.invite_code} />
                         </div>
                       </Link>
                     </li>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Copy, Check } from "lucide-react";
+import { Link2, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { createPool } from "../actions";
@@ -59,33 +59,35 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
   }
 
   if (created) {
-    const url = typeof window !== "undefined" ? `${window.location.origin}/join/${created.invite_code}` : "";
     return (
       <div className="space-y-5">
         <div>
           <h2 className="text-lg font-semibold">¡Porra creada!</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Comparte el código o el enlace con tu grupo.
+            Comparte el enlace con tu grupo para que se unan.
           </p>
         </div>
 
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Código</div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">Enlace de invitación</div>
           <div className="mt-1.5 flex items-center gap-2">
-            <code className="flex-1 rounded-md border border-zinc-800/80 bg-zinc-950 px-3 py-2 font-mono text-sm">
-              {created.invite_code}
+            <code className="flex-1 rounded-md border border-zinc-800/80 bg-zinc-950 px-3 py-2 text-sm truncate">
+              {typeof window !== "undefined"
+                ? `${window.location.origin}/join/${created.invite_code}`
+                : `/join/${created.invite_code}`}
             </code>
             <Button
               type="button"
               variant="outline"
               onClick={() => {
-                navigator.clipboard.writeText(url || created.invite_code);
+                const url = `${window.location.origin}/join/${created.invite_code}`;
+                navigator.clipboard.writeText(url);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               }}
             >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copiado" : "Copiar enlace"}
+              {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+              {copied ? "¡Copiado!" : "Copiar enlace"}
             </Button>
           </div>
         </div>
