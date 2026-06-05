@@ -784,7 +784,7 @@ function MobileLayout(props: LayoutProps) {
   const accentColor = VIEW_COLORS[viewMode];
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Frozen banner (own-closed) */}
       {viewMode === "own-closed" && (
         <div className="px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
@@ -1262,7 +1262,7 @@ function DesktopLayout(
     : "??";
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Top header bar for viewing-other */}
       {viewMode === "viewing-other" && (
         <div className="h-12 border-b border-zinc-800/80 bg-zinc-950 flex items-center px-5 shrink-0 gap-4">

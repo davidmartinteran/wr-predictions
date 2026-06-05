@@ -31,7 +31,7 @@ export default async function PoolLayout({
         participantCount={participantCount}
         displayName={participation.display_name}
       />
-      <main className="flex-1 pb-20 lg:pb-0 min-h-0">{children}</main>
+      <main className="flex flex-col flex-1 pb-20 lg:pb-0 min-h-0 overflow-hidden">{children}</main>
       <BottomNav poolId={poolId} />
     </div>
   );

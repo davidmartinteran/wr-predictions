@@ -342,7 +342,7 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       <div className="px-5 pt-2 pb-3 border-b border-zinc-800/80 shrink-0">
         <div className="flex items-baseline justify-between mb-2.5">
           <div>
