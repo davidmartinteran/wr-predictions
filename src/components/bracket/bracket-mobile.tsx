@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trophy } from "lucide-react";
+import { Trophy, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
 import { BracketMatchCard } from "./bracket-match";
@@ -13,6 +13,7 @@ type Props = {
   bracketState: BracketState;
   disabled: boolean;
   onPickWinner: (stage: Stage, slot: number, teamId: string) => void;
+  onClear?: () => void;
 };
 
 const MOBILE_TABS: { stage: Stage; short: string }[] = [
@@ -23,7 +24,7 @@ const MOBILE_TABS: { stage: Stage; short: string }[] = [
   { stage: "FINAL", short: "F" },
 ];
 
-export function BracketMobileView({ bracketState, disabled, onPickWinner }: Props) {
+export function BracketMobileView({ bracketState, disabled, onPickWinner, onClear }: Props) {
   const [activeRound, setActiveRound] = useState<Stage>("R32");
   const matches = bracketState.matches[activeRound];
   const label = STAGE_LABELS[activeRound];
@@ -63,9 +64,20 @@ export function BracketMobileView({ bracketState, disabled, onPickWinner }: Prop
         <span className="text-[12px] text-zinc-400">
           {label}
         </span>
-        <span className="text-[11px] text-zinc-500 tabular-nums">
-          {filled}/{total} partidos
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[11px] text-zinc-500 tabular-nums">
+            {filled}/{total} partidos
+          </span>
+          {!disabled && bracketState.filledCount > 0 && onClear && (
+            <button
+              onClick={onClear}
+              className="text-zinc-600 hover:text-zinc-400 transition-colors"
+              title="Limpiar bracket"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Match list */}

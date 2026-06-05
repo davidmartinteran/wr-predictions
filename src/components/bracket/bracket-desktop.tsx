@@ -1,6 +1,6 @@
 "use client";
 
-import { Trophy } from "lucide-react";
+import { Trophy, Trash2 } from "lucide-react";
 import { TeamFlag } from "@/components/team-flag";
 import { BracketMatchCard } from "./bracket-match";
 import { STAGES, STAGE_LABELS, STAGE_MATCH_COUNTS, type Stage } from "@/lib/bracket/mapping";
@@ -10,6 +10,7 @@ type Props = {
   bracketState: BracketState;
   disabled: boolean;
   onPickWinner: (stage: Stage, slot: number, teamId: string) => void;
+  onClear?: () => void;
 };
 
 const INACTIVE = "rgba(39,39,42,0.5)";
@@ -17,23 +18,34 @@ const ACTIVE = "rgba(27,158,91,0.7)";
 const CARD_W = 180;
 const CONNECTOR_W = 32;
 
-export function BracketDesktopView({ bracketState, disabled, onPickWinner }: Props) {
+export function BracketDesktopView({ bracketState, disabled, onPickWinner, onClear }: Props) {
   return (
     <div className="flex flex-col h-full min-h-0">
-      {bracketState.champion && (
-        <div className="shrink-0 flex justify-end px-6 py-3">
-          <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/8 px-4 py-2.5">
-            <Trophy className="w-4 h-4 text-primary shrink-0" />
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">Tu campeón</div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <TeamFlag code={bracketState.champion.code} size={16} className="shrink-0" />
-                <span className="text-[13px] font-semibold text-zinc-50 truncate">
-                  {bracketState.champion.name}
-                </span>
+      {(bracketState.champion || (!disabled && bracketState.filledCount > 0 && onClear)) && (
+        <div className="shrink-0 flex items-center justify-end gap-2 px-6 py-3">
+          {bracketState.champion && (
+            <div className="flex items-center gap-2.5 rounded-xl border border-primary/40 bg-primary/8 px-4 py-2.5">
+              <Trophy className="w-4 h-4 text-primary shrink-0" />
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500">Tu campeón</div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <TeamFlag code={bracketState.champion.code} size={16} className="shrink-0" />
+                  <span className="text-[13px] font-semibold text-zinc-50 truncate">
+                    {bracketState.champion.name}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+          {!disabled && bracketState.filledCount > 0 && onClear && (
+            <button
+              onClick={onClear}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 transition-colors"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Limpiar</span>
+            </button>
+          )}
         </div>
       )}
 

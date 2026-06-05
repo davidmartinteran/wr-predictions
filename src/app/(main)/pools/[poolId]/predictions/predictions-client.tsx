@@ -19,6 +19,7 @@ import {
   Eye,
   Snowflake,
   Settings,
+  Trash2,
 } from "lucide-react";
 import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
@@ -33,6 +34,9 @@ import {
   deleteGroupTiebreak,
   saveAdminExtra,
   deleteAdminExtra,
+  clearGroupPredictions,
+  clearAllExtras,
+  clearAllBracket,
 } from "./actions";
 import {
   ExtrasSection,
@@ -59,6 +63,7 @@ import { BracketMobileView } from "@/components/bracket/bracket-mobile";
 import { BracketDesktopView } from "@/components/bracket/bracket-desktop";
 import { ThirdsTiebreaker } from "@/components/bracket/thirds-tiebreaker";
 import { GroupTiebreakModal } from "@/components/bracket/group-tiebreak-modal";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 type Section = "groups" | "bracket" | "extras" | "admin";
 
@@ -614,6 +619,71 @@ export function PredictionsClient({
     return map;
   }, [ownPredictions]);
 
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  const handleClearGroup = useCallback(
+    (group: string) => {
+      const ids = matches.filter((m) => m.group_letter === group).map((m) => m.id);
+      if (!ids.length) return;
+      setConfirmModal({
+        title: `Limpiar Grupo ${group}`,
+        description: "Se borrarán todos los resultados de este grupo. Podrás volver a rellenarlos.",
+        confirmLabel: "Borrar",
+        onConfirm: () => {
+          setScores((prev) => {
+            const next = { ...prev };
+            for (const id of ids) delete next[id];
+            return next;
+          });
+          setGroupTiebreaks((prev) => {
+            if (!prev[group]) return prev;
+            const next = { ...prev };
+            delete next[group];
+            return next;
+          });
+          startTransition(async () => {
+            await clearGroupPredictions({ pool_id: poolId, match_ids: ids });
+            await deleteGroupTiebreak({ pool_id: poolId, group_letter: group });
+          });
+        },
+      });
+    },
+    [matches, poolId],
+  );
+
+  const handleClearExtras = useCallback(() => {
+    setConfirmModal({
+      title: "Limpiar extras",
+      description: "Se borrarán todas las predicciones extra. Podrás volver a elegirlas.",
+      confirmLabel: "Borrar",
+      onConfirm: () => {
+        setExtras({});
+        startTransition(async () => {
+          await clearAllExtras({ pool_id: poolId });
+        });
+      },
+    });
+  }, [poolId]);
+
+  const handleClearBracket = useCallback(() => {
+    setConfirmModal({
+      title: "Limpiar bracket",
+      description: "Se borrarán todas las predicciones del bracket. Podrás volver a rellenarlas.",
+      confirmLabel: "Borrar",
+      onConfirm: () => {
+        setKnockoutPicks({});
+        startTransition(async () => {
+          await clearAllBracket({ pool_id: poolId });
+        });
+      },
+    });
+  }, [poolId]);
+
   const sharedProps = {
     activeSection,
     setActiveSection,
@@ -658,6 +728,9 @@ export function PredictionsClient({
     adminExtras,
     handleAdminExtraChange,
     adminFilledCount,
+    handleClearGroup,
+    handleClearExtras,
+    handleClearBracket,
   };
 
   return (
@@ -668,6 +741,15 @@ export function PredictionsClient({
       <div className="hidden lg:contents">
         <DesktopLayout {...sharedProps} groupFilledCount={groupFilledCount} />
       </div>
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          description={confirmModal.description}
+          confirmLabel={confirmModal.confirmLabel}
+          onConfirm={confirmModal.onConfirm}
+          onClose={() => setConfirmModal(null)}
+        />
+      )}
     </>
   );
 }
@@ -734,6 +816,9 @@ type LayoutProps = {
   adminExtras: Record<string, string>;
   handleAdminExtraChange: (kind: string, value: string | null) => void;
   adminFilledCount: number;
+  handleClearGroup: (group: string) => void;
+  handleClearExtras: () => void;
+  handleClearBracket: () => void;
 };
 
 function MobileLayout(props: LayoutProps) {
@@ -780,6 +865,9 @@ function MobileLayout(props: LayoutProps) {
     adminExtras,
     handleAdminExtraChange,
     adminFilledCount,
+    handleClearGroup,
+    handleClearExtras,
+    handleClearBracket,
   } = props;
 
   const accentColor = VIEW_COLORS[viewMode];
@@ -918,8 +1006,19 @@ function MobileLayout(props: LayoutProps) {
               <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
                 {groupMatches.length} partidos · Grupo {activeGroup}
               </div>
-              <div className="text-[11px] text-zinc-500 tabular-nums">
-                {groupFilled}/{groupMatches.length}
+              <div className="flex items-center gap-2.5">
+                <span className="text-[11px] text-zinc-500 tabular-nums">
+                  {groupFilled}/{groupMatches.length}
+                </span>
+                {viewMode === "own-open" && groupFilled > 0 && (
+                  <button
+                    onClick={() => handleClearGroup(activeGroup)}
+                    className="text-zinc-600 hover:text-zinc-400 transition-colors"
+                    title="Limpiar grupo"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             </div>
             <div className="space-y-2.5">
@@ -1005,6 +1104,7 @@ function MobileLayout(props: LayoutProps) {
             bracketState={bracketState}
             disabled={disabled}
             onPickWinner={handleKnockoutPick}
+            onClear={handleClearBracket}
           />
         ) : null)}
       {activeSection === "extras" && (
@@ -1015,6 +1115,7 @@ function MobileLayout(props: LayoutProps) {
             disabled={disabled}
             onExtraChange={handleExtraChange}
             filledCount={extrasFilledCount}
+            onClear={handleClearExtras}
           />
         </div>
       )}
@@ -1231,6 +1332,9 @@ function DesktopLayout(
     adminExtras,
     handleAdminExtraChange,
     adminFilledCount,
+    handleClearGroup,
+    handleClearExtras,
+    handleClearBracket,
   } = props;
   const accentColor = VIEW_COLORS[viewMode];
   const activeGroupTeams = useMemo(() => {
@@ -1525,9 +1629,20 @@ function DesktopLayout(
                   </div>
                 </div>
                 {viewMode === "own-open" && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
-                    <Lock className="w-3 h-3" />
-                    <span>Bloqueo: 11 jun 17:00</span>
+                  <div className="flex items-center gap-2">
+                    {groupFilled > 0 && (
+                      <button
+                        onClick={() => handleClearGroup(activeGroup)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Limpiar</span>
+                      </button>
+                    )}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
+                      <Lock className="w-3 h-3" />
+                      <span>Bloqueo: 11 jun 17:00</span>
+                    </div>
                   </div>
                 )}
                 {viewMode === "viewing-other" && (
@@ -1666,6 +1781,7 @@ function DesktopLayout(
                 bracketState={bracketState}
                 disabled={disabled}
                 onPickWinner={handleKnockoutPick}
+                onClear={handleClearBracket}
               />
             ) : null)}
 
@@ -1676,6 +1792,7 @@ function DesktopLayout(
               disabled={disabled}
               onExtraChange={handleExtraChange}
               filledCount={extrasFilledCount}
+              onClear={handleClearExtras}
             />
           )}
 

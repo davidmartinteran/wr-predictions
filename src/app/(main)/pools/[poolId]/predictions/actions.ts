@@ -263,3 +263,48 @@ export async function deleteGroupTiebreak(data: { pool_id: string; group_letter:
 
   return { success: true };
 }
+
+// ── Bulk clear actions ────────────────────────────────────────
+
+export async function clearGroupPredictions(data: { pool_id: string; match_ids: string[] }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  await supabase
+    .from("predictions_match")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("pool_id", data.pool_id)
+    .in("match_id", data.match_ids);
+
+  return { success: true };
+}
+
+export async function clearAllExtras(data: { pool_id: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  await supabase
+    .from("predictions_extra")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("pool_id", data.pool_id);
+
+  return { success: true };
+}
+
+export async function clearAllBracket(data: { pool_id: string }) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  await supabase
+    .from("predictions_knockout")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("pool_id", data.pool_id);
+
+  return { success: true };
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Check, Search, Trophy, Award, Zap, Target, Shield, X, Star, ShieldCheck } from "lucide-react";
+import { Check, Search, Trophy, Award, Zap, Target, Shield, X, Star, ShieldCheck, Trash2 } from "lucide-react";
 import { TeamFlag } from "@/components/team-flag";
 import { PLAYERS, type Player } from "@/data/players";
 
@@ -18,6 +18,7 @@ type ExtrasSectionProps = {
   disabled: boolean;
   onExtraChange: (kind: string, value: string | null) => void;
   filledCount: number;
+  onClear?: () => void;
 };
 
 const EXTRA_CARDS = [
@@ -32,7 +33,7 @@ const EXTRA_CARDS = [
 
 export const EXTRAS_TOTAL = 7;
 
-export function ExtrasSection({ extras, allTeams, disabled, onExtraChange, filledCount }: ExtrasSectionProps) {
+export function ExtrasSection({ extras, allTeams, disabled, onExtraChange, filledCount, onClear }: ExtrasSectionProps) {
   const isComplete = filledCount === EXTRAS_TOTAL;
 
   return (
@@ -42,18 +43,29 @@ export function ExtrasSection({ extras, allTeams, disabled, onExtraChange, fille
         <h1 className="text-[17px] lg:text-[32px] font-bold text-zinc-50 leading-none">
           Predicciones extra
         </h1>
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium tabular-nums"
-          style={{
-            background: isComplete ? "rgba(27, 158, 91, 0.12)" : "rgb(24 24 27 / 0.6)",
-            borderColor: isComplete ? "#1B9E5B" : "rgba(39, 39, 42, 0.8)",
-            color: isComplete ? "#1B9E5B" : "rgb(161 161 170)",
-          }}
-        >
-          {isComplete && <Check className="w-3 h-3" />}
-          <span>
-            {isComplete ? "Listo" : <><span className="text-zinc-50">{filledCount}</span>/{EXTRAS_TOTAL} guardadas</>}
-          </span>
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium tabular-nums"
+            style={{
+              background: isComplete ? "rgba(27, 158, 91, 0.12)" : "rgb(24 24 27 / 0.6)",
+              borderColor: isComplete ? "#1B9E5B" : "rgba(39, 39, 42, 0.8)",
+              color: isComplete ? "#1B9E5B" : "rgb(161 161 170)",
+            }}
+          >
+            {isComplete && <Check className="w-3 h-3" />}
+            <span>
+              {isComplete ? "Listo" : <><span className="text-zinc-50">{filledCount}</span>/{EXTRAS_TOTAL} guardadas</>}
+            </span>
+          </div>
+          {!disabled && filledCount > 0 && onClear && (
+            <button
+              onClick={onClear}
+              className="text-zinc-600 hover:text-zinc-400 transition-colors"
+              title="Limpiar extras"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
