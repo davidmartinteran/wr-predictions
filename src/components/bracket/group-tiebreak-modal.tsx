@@ -103,9 +103,11 @@ export function GroupTiebreakModal({
           })}
         </div>
 
-        {order.length > 0 && order.length < tiedTeams.length && (
+        {order.length < tiedTeams.length && (
           <p className="mt-3 text-[11px] text-zinc-500 text-center">
-            Toca el siguiente equipo para la posición {tiedPositions[order.length] + 1}º
+            {order.length === 0
+              ? `Toca el equipo que quieres en ${tiedPositions[0] + 1}º posición`
+              : `Toca el siguiente equipo para la posición ${tiedPositions[order.length] + 1}º`}
           </p>
         )}
       </div>
