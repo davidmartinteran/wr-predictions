@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, Trophy, Users, Ticket } from "lucide-react";
+import { Plus, Trophy, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
-import { CodeForm } from "@/app/(main)/welcome/code-form";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { PoolsBottomNav } from "./pools-bottom-nav";
 import { SignOutButton } from "./sign-out-button";
@@ -105,33 +104,21 @@ export default async function PoolsListPage() {
                   Bienvenido a la Porra del Mundial
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Empieza creando tu porra o únete con un código.
+                  Crea tu porra y comparte el enlace con tu grupo.
                 </p>
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-6">
-                  <h3 className="text-base font-semibold">Crear nueva porra</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Te conviertes en admin y compartes el código con tu grupo.
-                  </p>
-                  <Link
-                    href="/pools/new"
-                    className={buttonVariants({ className: "mt-5 w-full justify-center h-11" })}
-                  >
-                    <Plus className="h-4 w-4" /> Crear porra
-                  </Link>
-                </div>
-
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-6">
-                  <h3 className="text-base font-semibold">Tengo un código de invitación</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Pega aquí el código que te ha pasado el admin del grupo.
-                  </p>
-                  <div className="mt-5">
-                    <CodeForm />
-                  </div>
-                </div>
+              <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-6">
+                <h3 className="text-base font-semibold">Crear nueva porra</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Te conviertes en admin y compartes el enlace con tu grupo.
+                </p>
+                <Link
+                  href="/pools/new"
+                  className={buttonVariants({ className: "mt-5 w-full justify-center h-11" })}
+                >
+                  <Plus className="h-4 w-4" /> Crear porra
+                </Link>
               </div>
             </>
           ) : (
@@ -168,7 +155,7 @@ export default async function PoolsListPage() {
                 )}
               </ul>
 
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-6">
                 <Link
                   href="/pools/new"
                   className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-5 hover:border-zinc-700 transition-colors flex items-center gap-3"
@@ -181,14 +168,6 @@ export default async function PoolsListPage() {
                     <div className="text-[11px] text-muted-foreground">Nueva porra como admin</div>
                   </div>
                 </Link>
-
-                <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Ticket className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-semibold">Unirme con código</span>
-                  </div>
-                  <CodeForm />
-                </div>
               </div>
             </>
           )}
