@@ -13,7 +13,7 @@ export function TeamBadge({ name, code, side }: TeamBadgeProps) {
     <div
       className={cn(
         "flex items-center gap-2 flex-1 min-w-0",
-        side === "away" && "flex-row-reverse text-right justify-end"
+        side === "away" && "flex-row-reverse text-right"
       )}
     >
       <TeamFlag code={code} size={28} className="shrink-0" />
