@@ -81,7 +81,7 @@ export function BracketMobileView({ bracketState, disabled, onPickWinner, onClea
       </div>
 
       {/* Match list */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pb-4 space-y-2.5">
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] space-y-2.5">
         {matches.map((m) => (
           <BracketMatchCard
             key={`${m.stage}:${m.slot}`}
