@@ -51,6 +51,7 @@ import { TeamFlag } from "@/components/team-flag";
 import { computeStandings } from "@/lib/bracket/standings";
 import {
   deriveAllGroupStandings,
+  applyGroupTiebreaks,
   rankThirdPlacedTeams,
   resolveThirds,
   buildBracketState,
@@ -380,9 +381,14 @@ export function PredictionsClient({
   const allGroupsComplete = completedCount === totalMatches;
 
   // Bracket computation — recomputes on any score change so group changes propagate
-  const allStandings = useMemo(
+  const rawStandings = useMemo(
     () => (allGroupsComplete ? deriveAllGroupStandings(matches, scores) : null),
     [allGroupsComplete, matches, scores],
+  );
+
+  const allStandings = useMemo(
+    () => (rawStandings ? applyGroupTiebreaks(rawStandings, groupTiebreaks) : null),
+    [rawStandings, groupTiebreaks],
   );
 
   const thirdsRanking = useMemo(
@@ -420,7 +426,6 @@ export function PredictionsClient({
       allStandings,
       resolvedThirdTeams,
       knockoutPicks,
-      groupTiebreaks,
     );
   }, [
     allStandings,
@@ -428,7 +433,6 @@ export function PredictionsClient({
     thirdsResolved,
     selectedThirds,
     knockoutPicks,
-    groupTiebreaks,
   ]);
 
   // Clear all knockout picks when R32 teams change (group results altered qualified teams)

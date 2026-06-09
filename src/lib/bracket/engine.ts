@@ -132,6 +132,31 @@ export function resolveThirds(
   return [...autoQualified, ...userPickedFromTied];
 }
 
+// ── Tiebreak resolution ─────────────────────────────────────────
+
+export function applyGroupTiebreaks(
+  allStandings: AllGroupStandings,
+  groupTiebreaks: Record<string, string[]>,
+): AllGroupStandings {
+  const resolved: AllGroupStandings = {};
+  for (const g of GROUPS) {
+    const rows = [...allStandings[g].rows];
+    const tiebreak = groupTiebreaks[g];
+    if (tiebreak) {
+      rows.sort((a, b) => {
+        const ai = tiebreak.indexOf(a.id);
+        const bi = tiebreak.indexOf(b.id);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        return b.pts - a.pts || b.gd - a.gd || b.gf - a.gf;
+      });
+    }
+    resolved[g] = { ...allStandings[g], rows };
+  }
+  return resolved;
+}
+
 // ── Bracket state builder ────────────────────────────────────────
 
 function teamInfoFromRow(row: StandingRow): TeamInfo {
@@ -141,8 +166,7 @@ function teamInfoFromRow(row: StandingRow): TeamInfo {
 export function buildBracketState(
   allStandings: AllGroupStandings,
   resolvedThirds: ThirdPlaceTeam[],
-  knockoutPicks: Record<string, string>, // key: "stage:slot", value: team_id
-  groupTiebreaks: Record<string, string[]>, // key: group letter, value: ordered team IDs for tied positions
+  knockoutPicks: Record<string, string>,
 ): BracketState {
   const matches: Record<Stage, BracketMatch[]> = {
     R32: [],
@@ -163,23 +187,9 @@ export function buildBracketState(
     }
   }
 
-  // Apply group tiebreaks to get resolved standings
   const resolvedStandings: Record<string, StandingRow[]> = {};
   for (const g of GROUPS) {
-    const rows = [...allStandings[g].rows];
-    const tiebreak = groupTiebreaks[g];
-    if (tiebreak) {
-      // Re-sort tied teams according to user's manual order
-      rows.sort((a, b) => {
-        const ai = tiebreak.indexOf(a.id);
-        const bi = tiebreak.indexOf(b.id);
-        if (ai !== -1 && bi !== -1) return ai - bi;
-        if (ai !== -1) return -1;
-        if (bi !== -1) return 1;
-        return b.pts - a.pts || b.gd - a.gd || b.gf - a.gf;
-      });
-    }
-    resolvedStandings[g] = rows;
+    resolvedStandings[g] = allStandings[g].rows;
   }
 
   // Resolve which third-placed team goes to which R32 slot
