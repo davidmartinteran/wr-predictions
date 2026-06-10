@@ -4,7 +4,6 @@ import { Plus, Trophy, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { buttonVariants } from "@/components/ui/button";
 import { CopyCodeButton } from "@/components/copy-code-button";
-import { PoolsBottomNav } from "./pools-bottom-nav";
 import { SignOutButton } from "./sign-out-button";
 
 export default async function PoolsListPage() {
@@ -183,7 +182,6 @@ export default async function PoolsListPage() {
         </div>
       </main>
 
-      <PoolsBottomNav firstPoolId={firstPoolId} />
     </div>
   );
 }

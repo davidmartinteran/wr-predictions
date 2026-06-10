@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { getUser, getPool, getParticipation, getParticipantCount } from "@/lib/supabase/queries";
-import { BottomNav } from "@/components/bottom-nav";
 import { TopBar } from "@/components/top-bar";
 
 export default async function PoolLayout({
@@ -32,7 +31,6 @@ export default async function PoolLayout({
         displayName={participation.display_name}
       />
       <main className="flex flex-col flex-1 pb-16 lg:pb-0 min-h-0 overflow-hidden">{children}</main>
-      <BottomNav poolId={poolId} />
     </div>
   );
 }

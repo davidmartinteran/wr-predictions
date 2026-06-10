@@ -5,12 +5,18 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, List, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Props = {
-  poolId: string;
-};
+function extractPoolId(pathname: string): string | null {
+  const match = pathname.match(/^\/pools\/([^/]+)/);
+  if (!match || match[1] === "new") return null;
+  return match[1];
+}
 
-export function BottomNav({ poolId }: Props) {
+export function BottomNav({ poolId: poolIdProp }: { poolId?: string } = {}) {
   const pathname = usePathname();
+  const poolId = poolIdProp ?? extractPoolId(pathname);
+
+  if (!poolId) return null;
+
   const base = `/pools/${poolId}`;
 
   const tabs = [
