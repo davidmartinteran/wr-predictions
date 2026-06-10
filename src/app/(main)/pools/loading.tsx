@@ -81,7 +81,7 @@ export default function PoolsListLoading() {
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800/80 bg-zinc-950/95 lg:hidden">
         <div className="flex h-16 items-center justify-around pb-[env(safe-area-inset-bottom)]">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4].map((i) => (
             <div key={i} className="flex flex-col items-center gap-1 px-4 py-1.5">
               <Skeleton className="h-5 w-5 rounded" />
               <Skeleton className="h-3 w-14" />

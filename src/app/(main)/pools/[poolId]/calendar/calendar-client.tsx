@@ -171,14 +171,6 @@ export function CalendarClient({ matches, predictions, scoringRules }: Props) {
             ))}
           </div>
 
-          {currentDay.matches.some(
-            (m) => !m.finished && !isLiveMatch(m),
-          ) && (
-            <p className="text-[11px] text-zinc-600 text-center mt-4">
-              Aún por jugarse – se muestran tus pronósticos (la porra ya está
-              cerrada).
-            </p>
-          )}
         </div>
       </div>
     </div>
