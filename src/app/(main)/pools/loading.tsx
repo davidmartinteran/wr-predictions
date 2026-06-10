@@ -31,9 +31,10 @@ export default function PoolsListLoading() {
         </div>
         <nav className="ml-10 flex items-center gap-1">
           <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
           <Skeleton className="h-8 w-28 rounded-md" />
           <span className="px-3 py-1.5 text-[13px] rounded-md bg-zinc-900 text-zinc-50 border border-zinc-800">
-            Mis porras
+            Mi Porra
           </span>
         </nav>
       </header>

@@ -62,6 +62,12 @@ export default async function PoolsListPage() {
           {firstPoolId && (
             <>
               <Link
+                href={`/pools/${firstPoolId}/calendar`}
+                className="px-3 py-1.5 text-[13px] rounded-md transition-colors text-zinc-400 hover:text-zinc-300"
+              >
+                Calendario
+              </Link>
+              <Link
                 href={`/pools/${firstPoolId}/predictions`}
                 className="px-3 py-1.5 text-[13px] rounded-md transition-colors text-zinc-400 hover:text-zinc-300"
               >
@@ -76,7 +82,7 @@ export default async function PoolsListPage() {
             </>
           )}
           <span className="px-3 py-1.5 text-[13px] rounded-md bg-zinc-900 text-zinc-50 border border-zinc-800">
-            Mis porras
+            Mi Porra
           </span>
         </nav>
       </header>

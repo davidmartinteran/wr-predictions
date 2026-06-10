@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { List, Trophy, User } from "lucide-react";
+import { CalendarDays, List, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -12,11 +12,12 @@ export function PoolsBottomNav({ firstPoolId }: Props) {
   const tabs = [
     ...(firstPoolId
       ? [
+          { href: `/pools/${firstPoolId}/calendar`, label: "Calendario", icon: CalendarDays },
           { href: `/pools/${firstPoolId}/predictions`, label: "Pronósticos", icon: List },
           { href: `/pools/${firstPoolId}/leaderboard`, label: "Clasificación", icon: Trophy },
         ]
       : []),
-    { href: "/pools", label: "Mis porras", icon: User },
+    { href: "/pools", label: "Mi Porra", icon: User },
   ] as const;
 
   return (
