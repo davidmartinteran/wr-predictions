@@ -237,7 +237,7 @@ export function PredictionsSkeleton() {
 
             {/* CENTER */}
             <main className="flex-1 overflow-y-auto">
-              <div className="px-6 xl:px-10 py-7 max-w-230">
+              <div className="px-6 xl:px-10 py-7">
                 {/* Group header */}
                 <div className="flex items-baseline justify-between mb-1">
                   <div className="flex items-baseline gap-3">
