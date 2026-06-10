@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { List, Trophy, User } from "lucide-react";
+import { CalendarDays, List, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -14,9 +14,10 @@ export function BottomNav({ poolId }: Props) {
   const base = `/pools/${poolId}`;
 
   const tabs = [
+    { href: `${base}/calendar`, label: "Calendario", icon: CalendarDays },
     { href: `${base}/predictions`, label: "Pronósticos", icon: List },
     { href: `${base}/leaderboard`, label: "Clasificación", icon: Trophy },
-    { href: `/pools`, label: "Mis porras", icon: User },
+    { href: `/pools`, label: "Mi Porra", icon: User },
   ] as const;
 
   return (

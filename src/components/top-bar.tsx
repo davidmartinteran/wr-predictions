@@ -26,9 +26,10 @@ export function TopBar({ poolId, poolName, participantCount, displayName }: Prop
   const base = `/pools/${poolId}`;
 
   const tabs = [
+    { href: `${base}/calendar`, label: "Calendario" },
     { href: `${base}/predictions`, label: "Pronósticos" },
     { href: `${base}/leaderboard`, label: "Clasificación" },
-    { href: `/pools`, label: "Mis porras" },
+    { href: `/pools`, label: "Mi Porra" },
   ];
 
   return (
