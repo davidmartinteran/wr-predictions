@@ -10,6 +10,7 @@ type Props = {
   currentUserId: string;
   targetUserId?: string;
   isAdmin: boolean;
+  deadline: string;
 };
 
 export async function PredictionsLoader({
@@ -19,6 +20,7 @@ export async function PredictionsLoader({
   currentUserId,
   targetUserId,
   isAdmin,
+  deadline,
 }: Props) {
   const supabase = await createClient();
   const predictionsUserId =
@@ -172,6 +174,7 @@ export async function PredictionsLoader({
       }))}
       isAdmin={isAdmin}
       adminResults={adminResults}
+      deadline={deadline}
     />
   );
 }

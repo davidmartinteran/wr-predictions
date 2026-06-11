@@ -95,7 +95,7 @@ export async function savePrediction(data: z.infer<typeof predictionSchema>) {
         away_score: parsed.data.away_score,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,match_id" }
+      { onConflict: "user_id,pool_id,match_id" }
     );
 
   if (error) {

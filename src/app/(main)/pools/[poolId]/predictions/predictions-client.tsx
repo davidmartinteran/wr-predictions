@@ -127,7 +127,17 @@ type Props = {
   savedTiebreaks: SavedTiebreak[];
   isAdmin?: boolean;
   adminResults?: { kind: string; value: string }[];
+  deadline?: string;
 };
+
+function formatDeadlineBadge(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 const VIEW_COLORS: Record<ViewMode, string> = {
   "own-open": "#1B9E5B",
@@ -159,6 +169,7 @@ export function PredictionsClient({
   savedTiebreaks,
   isAdmin,
   adminResults,
+  deadline,
 }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
@@ -689,6 +700,7 @@ export function PredictionsClient({
   }, [poolId]);
 
   const sharedProps = {
+    deadline,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -768,6 +780,7 @@ type SectionCounts = {
 };
 
 type LayoutProps = {
+  deadline?: string;
   activeSection: Section;
   setActiveSection: (s: Section) => void;
   sectionCounts: SectionCounts;
@@ -1293,6 +1306,7 @@ function DesktopLayout(
   props: LayoutProps & { groupFilledCount: (g: string) => number },
 ) {
   const {
+    deadline,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -1645,7 +1659,9 @@ function DesktopLayout(
                     )}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400">
                       <Lock className="w-3 h-3" />
-                      <span>Bloqueo: 11 jun 17:00</span>
+                      <span>
+                        Bloqueo: {deadline ? formatDeadlineBadge(deadline) : "al inicio del Mundial"}
+                      </span>
                     </div>
                   </div>
                 )}

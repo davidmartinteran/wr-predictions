@@ -45,6 +45,7 @@ export default async function PredictionsPage({
           currentUserId={user.id}
           targetUserId={viewingOther ? targetUserId : undefined}
           isAdmin={isAdmin}
+          deadline={pool.deadline}
         />
       </Suspense>
     </div>
