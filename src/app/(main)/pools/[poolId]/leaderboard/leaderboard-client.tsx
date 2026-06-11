@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PlayerEntry } from "./page";
@@ -57,6 +58,17 @@ function formatDeadline(iso: string): string {
 export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline }: Props) {
   const [metric, setMetric] = useState<Category>("TOTAL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const router = useRouter();
+
+  // Con el torneo en marcha, los scores los recalcula la Edge Function
+  // poll-results al terminar cada partido — refrescamos cada 2 min.
+  useEffect(() => {
+    if (!deadline || new Date(deadline).getTime() > Date.now()) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 120_000);
+    return () => clearInterval(interval);
+  }, [deadline, router]);
 
   const deadlineLabel = useMemo(() => formatDeadline(deadline), [deadline]);
 

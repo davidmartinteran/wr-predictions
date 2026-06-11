@@ -25,6 +25,7 @@
 | Extras section | Completo | 5 categorías con player autocomplete + team selector |
 | PWA | Instalable | Manifest + SW + iconos placeholder (PM 2026). Deploy en Vercel con HTTPS |
 | CI/CD | Activo | Push a `main` → deploy automático en Vercel |
+| Resultados automáticos | Activo | ESPN (API no oficial, gratis) → Edge Function `poll-results` + pg_cron cada 5 min. Recalcula `scores` (RESULTS) al terminar cada partido |
 
 ### Pantallas diseñadas (DOCS/design/)
 
@@ -65,6 +66,8 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 | Player data | `src/data/players.ts` | ~250 jugadores, datos actualizados para autocomplete |
 | PWA | `public/manifest.json`, `public/sw.js`, `src/components/sw-register.tsx` | ✅ — instalable, iconos placeholder |
 | Cerrar sesión | `src/app/(main)/pools/sign-out-button.tsx` | ✅ — botón en Mis Porras |
+| Resultados live + scoring auto | `supabase/functions/poll-results/`, migraciones 012–013 | ✅ — polling ESPN cada 5 min (solo en ventana de partido), respeta overrides `source='MANUAL'`, upsert scores RESULTS. 72 partidos mapeados a ESPN event id (`api_fixture_id`) |
+| Calendario live | `calendar-client.tsx`, `lib/calendar/utils.ts` | ✅ — badge EN VIVO por `matches.status` + fallback reloj, marcador parcial, auto-refresh 60s en ventana de juego. Leaderboard auto-refresh 120s post-deadline |
 
 ### Componentes UI existentes
 
@@ -101,7 +104,7 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 - [x] **Auth: SMTP + OTP + redirect URL producción** — ✅ Brevo SMTP + OTP flow (código 6 dígitos + magic link fallback) + email template con branding + `NEXT_PUBLIC_SITE_URL` en Vercel + cerrar sesión en Mis Porras
 - [x] **Admin: resultados extras** — ✅ Tabla `pool_results_extra` + pestaña "Admin" en predicciones (solo visible para admins) + server actions + UI con autocomplete jugadores y selector equipos
 - [ ] **Migración predictions_group_tiebreak** — tabla usada en código pero sin migración formal
-- [ ] **Migración scores CHECK constraint** — actualizar categorías a RESULTS/CLASSIFICATIONS/EXTRAS
+- [x] **Migración scores CHECK constraint** — ✅ migración 012: categorías RESULTS/CLASSIFICATIONS/EXTRAS/TOTAL
 - [ ] **Migración predictions_extra kind constraint** — actualizar a 5 kinds
 - [ ] **Estados de pool en UI** — banners LOCKED/REVEALED/LIVE, inputs disabled
 - [ ] Edge Function: reveal-pool cron (LOCKED → REVEALED el 11/jun 18:00)
@@ -109,7 +112,8 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 
 ### Media prioridad
 
-- [ ] Resultados automáticos — integración con OpenFootball (GitHub JSON) para scores. Polling cada 30 min via Edge Function cron en días de partido. Sin API key, sin rate limits.
+- [x] Resultados automáticos — ✅ ESPN scoreboard API (gratis, sin key) via Edge Function `poll-results` + pg_cron cada 5 min. Secretos en Vault (`project_url`, `service_role_key`)
+- [ ] Recalcular CLASSIFICATIONS y EXTRAS al cerrar fases (hoy solo RESULTS es automático; extras siguen siendo manuales via pestaña Admin)
 - [ ] TopBar — datos dinámicos (nombre pool, nº jugadores, user)
 - [ ] Leaderboard: pulir estilos finales, verificar con datos reales
 - [ ] Actualizar `src/data/players.ts` con convocatorias oficiales cuando se publiquen (~primera semana junio)
@@ -134,7 +138,7 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 
 ## Decisiones pendientes
 
-- **Fuente de resultados live:** OpenFootball (GitHub JSON estático, gratis) como fuente principal. Goleadores/asistentes/mejor jugador → admin manual. API-Football Pro ($19/mes) como alternativa si se necesita automatización completa (free tier no cubre temporada 2026).
+- ~~Fuente de resultados live~~ **Resuelto (2026-06-11):** ESPN scoreboard API no oficial (`site.api.espn.com/.../soccer/fifa.world/scoreboard`) — gratis, sin key, estado y marcador en vivo. Fallback: override manual del admin (`matches.source='MANUAL'` nunca se pisa). OpenFootball descartado (actualización manual ~1×/día); API-Football free no cubre 2026. Alias de códigos ESPN→BD: HAI→HTI (resto coinciden).
 
 ---
 

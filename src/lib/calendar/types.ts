@@ -14,6 +14,7 @@ export type CalendarMatch = {
   home_score: number | null;
   away_score: number | null;
   finished: boolean;
+  status: string;
   home_team: CalendarTeam | null;
   away_team: CalendarTeam | null;
 };

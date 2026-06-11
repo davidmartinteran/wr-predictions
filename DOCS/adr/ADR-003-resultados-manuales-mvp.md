@@ -1,8 +1,19 @@
 # ADR-003 — Resultados oficiales vía API-Football + override manual
 
-**Estado:** Aceptado (revisado)
+**Estado:** Sustituido (2026-06-11) — ver revisión abajo
 **Fecha:** 2026-05-20
 **Contexto:** Fase 1 — Architecture & Design
+
+> **Revisión 2026-06-11:** API-Football free tier no cubre la temporada 2026 y
+> OpenFootball se actualiza a mano ~1×/día (inválido para live). Implementado
+> con la **API no oficial de ESPN** (`site.api.espn.com/.../soccer/fifa.world/scoreboard`):
+> gratis, sin key, estado + marcador en vivo. Edge Function `poll-results`
+> (cron pg_cron cada 5 min, solo actúa en ventana de partido) actualiza
+> `matches.status/home_score/away_score/finished` y recalcula `scores` (RESULTS).
+> El override manual del admin se mantiene tal como describe este ADR:
+> `matches.source='MANUAL'` nunca es sobrescrito por el polling.
+> Mitigación del riesgo de API no oficial: si ESPN falla, el admin mete
+> resultados a mano y el badge EN VIVO degrada a heurística de reloj.
 
 ---
 

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { CalendarClient } from "./calendar-client";
-import type { ScoringRules } from "@/lib/scoring/engine";
+import { normalizePoolRules } from "@/lib/scoring/rules";
 
 type Props = {
   poolId: string;
@@ -25,7 +25,7 @@ export async function CalendarLoader({
       .select(
         `
         id, match_number, kickoff, stage, group_letter,
-        home_score, away_score, finished,
+        home_score, away_score, finished, status,
         home:teams!matches_home_team_fkey(id, name, code, flag_emoji),
         away:teams!matches_away_team_fkey(id, name, code, flag_emoji)
       `,
@@ -54,6 +54,7 @@ export async function CalendarLoader({
     home_score: m.home_score,
     away_score: m.away_score,
     finished: m.finished,
+    status: m.status,
     home_team: m.home as unknown as {
       id: string;
       name: string;
@@ -74,7 +75,7 @@ export async function CalendarLoader({
     away_score: p.away_score,
   }));
 
-  const scoringRules = (poolData?.scoring_rules ?? null) as ScoringRules | null;
+  const scoringRules = normalizePoolRules(poolData?.scoring_rules);
 
   return (
     <CalendarClient

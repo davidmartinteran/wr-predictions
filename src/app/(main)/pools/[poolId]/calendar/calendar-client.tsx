@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -34,6 +35,24 @@ type Props = {
 
 export function CalendarClient({ matches, predictions, scoringRules }: Props) {
   const rules = scoringRules ?? DEFAULT_RULES;
+  const router = useRouter();
+
+  // Refresca datos del server cada 60s mientras haya partidos en ventana de
+  // juego (la Edge Function poll-results actualiza la BD cada 5 min).
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      const active = matches.some((m) => {
+        if (m.finished || m.status === "FINISHED") return false;
+        if (m.status === "LIVE") return true;
+        const kickoff = new Date(m.kickoff).getTime();
+        return now >= kickoff - 5 * 60_000 && now <= kickoff + 3.5 * 3_600_000;
+      });
+      if (active) router.refresh();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [matches, router]);
 
   const predMap = useMemo(() => {
     const map = new Map<string, CalendarPrediction>();

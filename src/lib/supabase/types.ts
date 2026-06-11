@@ -84,6 +84,7 @@ export type Database = {
           match_number: number
           source: string | null
           stage: string
+          status: string
           tournament_id: string
         }
         Insert: {
@@ -100,6 +101,7 @@ export type Database = {
           match_number: number
           source?: string | null
           stage: string
+          status?: string
           tournament_id: string
         }
         Update: {
@@ -116,6 +118,7 @@ export type Database = {
           match_number?: number
           source?: string | null
           stage?: string
+          status?: string
           tournament_id?: string
         }
         Relationships: [

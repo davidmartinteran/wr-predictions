@@ -27,7 +27,10 @@ export function getPhaseLabel(stage: string, matchNumber: number): string {
 }
 
 export function isLiveMatch(match: CalendarMatch): boolean {
-  if (match.finished) return false;
+  if (match.finished || match.status === "FINISHED") return false;
+  // Estado real escrito por la Edge Function poll-results (ESPN)
+  if (match.status === "LIVE") return true;
+  // Fallback por reloj mientras el polling no haya marcado el partido
   const kickoff = new Date(match.kickoff).getTime();
   const now = Date.now();
   return now >= kickoff && now <= kickoff + 3 * 60 * 60 * 1000;
