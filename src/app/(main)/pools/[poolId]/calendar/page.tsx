@@ -32,6 +32,8 @@ export default async function CalendarPage({
 
   if (!pool || !participation) notFound();
 
+  const isPastDeadline = new Date(pool.deadline) < new Date();
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <Suspense fallback={<CalendarSkeleton />}>
@@ -39,6 +41,7 @@ export default async function CalendarPage({
           poolId={poolId}
           tournamentId={pool.tournament_id}
           currentUserId={user.id}
+          isPastDeadline={isPastDeadline}
         />
       </Suspense>
     </div>

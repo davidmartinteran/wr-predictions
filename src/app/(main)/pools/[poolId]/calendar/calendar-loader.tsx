@@ -6,12 +6,14 @@ type Props = {
   poolId: string;
   tournamentId: string;
   currentUserId: string;
+  isPastDeadline: boolean;
 };
 
 export async function CalendarLoader({
   poolId,
   tournamentId,
   currentUserId,
+  isPastDeadline,
 }: Props) {
   const supabase = await createClient();
 
@@ -77,10 +79,48 @@ export async function CalendarLoader({
 
   const scoringRules = normalizePoolRules(poolData?.scoring_rules);
 
+  // Pronósticos de los demás jugadores: solo post-deadline. El RLS de
+  // predictions_match es la barrera real (pool REVEALED/LIVE/CLOSED).
+  let otherPredictions: {
+    match_id: string;
+    user_id: string;
+    home_score: number;
+    away_score: number;
+  }[] = [];
+  let participants: { user_id: string; display_name: string }[] = [];
+
+  if (isPastDeadline) {
+    const [{ data: otherPreds }, { data: parts }] = await Promise.all([
+      supabase
+        .from("predictions_match")
+        .select("match_id, user_id, home_score, away_score")
+        .eq("pool_id", poolId)
+        .neq("user_id", currentUserId),
+      supabase
+        .from("participations")
+        .select("user_id, display_name")
+        .eq("pool_id", poolId)
+        .neq("user_id", currentUserId),
+    ]);
+
+    otherPredictions = (otherPreds ?? []).map((p) => ({
+      match_id: p.match_id,
+      user_id: p.user_id,
+      home_score: p.home_score,
+      away_score: p.away_score,
+    }));
+    participants = (parts ?? []).map((p) => ({
+      user_id: p.user_id,
+      display_name: p.display_name,
+    }));
+  }
+
   return (
     <CalendarClient
       matches={formattedMatches}
       predictions={formattedPredictions}
+      otherPredictions={otherPredictions}
+      participants={participants}
       scoringRules={scoringRules}
     />
   );

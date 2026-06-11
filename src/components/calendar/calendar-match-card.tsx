@@ -1,16 +1,26 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
 import { isLiveMatch, isSpainMatch } from "@/lib/calendar/utils";
 import type { CalendarMatch, CalendarPrediction } from "@/lib/calendar/types";
 import type { MatchScore } from "@/lib/scoring/engine";
 
+export type OtherPredictionEntry = {
+  userId: string;
+  displayName: string;
+  home_score: number | null;
+  away_score: number | null;
+  scoring: MatchScore | null;
+};
+
 type Props = {
   match: CalendarMatch;
   prediction: CalendarPrediction | null;
   scoring: MatchScore | null;
+  others: OtherPredictionEntry[];
 };
 
 function formatTime(kickoff: string): string {
@@ -118,7 +128,28 @@ function TeamRow({
   );
 }
 
-export function CalendarMatchCard({ match, prediction, scoring }: Props) {
+function OtherPredictionRow({ entry }: { entry: OtherPredictionEntry }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[12px] text-zinc-400 truncate">
+        {entry.displayName}
+      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        {entry.scoring && <ScoreBadge scoring={entry.scoring} />}
+        {entry.home_score !== null && entry.away_score !== null ? (
+          <span className="font-mono font-bold text-[13px] tabular-nums text-zinc-400">
+            {entry.home_score} – {entry.away_score}
+          </span>
+        ) : (
+          <span className="font-mono text-[13px] text-zinc-600">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function CalendarMatchCard({ match, prediction, scoring, others }: Props) {
+  const [othersOpen, setOthersOpen] = useState(false);
   const live = isLiveMatch(match);
   const spain = isSpainMatch(match);
   const finished = match.finished;
@@ -189,6 +220,31 @@ export function CalendarMatchCard({ match, prediction, scoring }: Props) {
           <span className="font-mono font-bold text-[13px] tabular-nums text-zinc-400">
             {prediction.home_score} – {prediction.away_score}
           </span>
+        </div>
+      )}
+
+      {/* Otros pronósticos (solo post-deadline; el loader no manda datos antes) */}
+      {others.length > 0 && (
+        <div className="mt-2 pt-2 border-t border-zinc-800/60">
+          <button
+            onClick={() => setOthersOpen((v) => !v)}
+            className="flex w-full items-center justify-between text-[10px] uppercase tracking-[0.1em] text-zinc-500 font-medium hover:text-zinc-400 transition-colors"
+          >
+            Otros pronósticos
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform",
+                othersOpen && "rotate-180"
+              )}
+            />
+          </button>
+          {othersOpen && (
+            <div className="mt-2 space-y-1.5">
+              {others.map((entry) => (
+                <OtherPredictionRow key={entry.userId} entry={entry} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

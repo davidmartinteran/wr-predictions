@@ -25,6 +25,18 @@ export type CalendarPrediction = {
   away_score: number | null;
 };
 
+export type CalendarOtherPrediction = {
+  match_id: string;
+  user_id: string;
+  home_score: number;
+  away_score: number;
+};
+
+export type CalendarParticipant = {
+  user_id: string;
+  display_name: string;
+};
+
 export type TournamentDay = {
   dateKey: string;
   date: Date;

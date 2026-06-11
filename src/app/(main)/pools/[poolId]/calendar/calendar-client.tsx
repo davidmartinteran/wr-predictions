@@ -23,17 +23,28 @@ import { DayHeader } from "@/components/calendar/day-header";
 import { CalendarMatchCard } from "@/components/calendar/calendar-match-card";
 import type {
   CalendarMatch,
+  CalendarOtherPrediction,
+  CalendarParticipant,
   CalendarPrediction,
   TournamentDay,
 } from "@/lib/calendar/types";
+import type { OtherPredictionEntry } from "@/components/calendar/calendar-match-card";
 
 type Props = {
   matches: CalendarMatch[];
   predictions: CalendarPrediction[];
+  otherPredictions: CalendarOtherPrediction[];
+  participants: CalendarParticipant[];
   scoringRules: ScoringRules | null;
 };
 
-export function CalendarClient({ matches, predictions, scoringRules }: Props) {
+export function CalendarClient({
+  matches,
+  predictions,
+  otherPredictions,
+  participants,
+  scoringRules,
+}: Props) {
   const rules = scoringRules ?? DEFAULT_RULES;
   const router = useRouter();
 
@@ -60,6 +71,27 @@ export function CalendarClient({ matches, predictions, scoringRules }: Props) {
     return map;
   }, [predictions]);
 
+  const otherPredsByMatch = useMemo(() => {
+    const map = new Map<string, Map<string, CalendarOtherPrediction>>();
+    for (const p of otherPredictions) {
+      let byUser = map.get(p.match_id);
+      if (!byUser) {
+        byUser = new Map();
+        map.set(p.match_id, byUser);
+      }
+      byUser.set(p.user_id, p);
+    }
+    return map;
+  }, [otherPredictions]);
+
+  const sortedParticipants = useMemo(
+    () =>
+      [...participants].sort((a, b) =>
+        a.display_name.localeCompare(b.display_name, "es"),
+      ),
+    [participants],
+  );
+
   const days = useMemo(() => groupMatchesByDay(matches), [matches]);
 
   const [selectedDate, setSelectedDate] = useState(() =>
@@ -83,18 +115,41 @@ export function CalendarClient({ matches, predictions, scoringRules }: Props) {
     setSelectedDate(findTodayOrNearest(days));
   }, [days]);
 
-  function getScoring(match: CalendarMatch): MatchScore | null {
+  function scoreFor(
+    match: CalendarMatch,
+    homeScore: number | null,
+    awayScore: number | null,
+  ): MatchScore | null {
     if (!match.finished || match.stage !== "GROUP") return null;
     if (match.home_score === null || match.away_score === null) return null;
-    const pred = predMap.get(match.id);
-    if (!pred || pred.home_score === null || pred.away_score === null)
-      return null;
+    if (homeScore === null || awayScore === null) return null;
     return scoreGroupMatch(
-      { home_score: pred.home_score, away_score: pred.away_score },
+      { home_score: homeScore, away_score: awayScore },
       { home_score: match.home_score, away_score: match.away_score },
       rules,
       isSpainMatch(match),
     );
+  }
+
+  function getScoring(match: CalendarMatch): MatchScore | null {
+    const pred = predMap.get(match.id);
+    if (!pred) return null;
+    return scoreFor(match, pred.home_score, pred.away_score);
+  }
+
+  function getOthers(match: CalendarMatch): OtherPredictionEntry[] {
+    if (sortedParticipants.length === 0) return [];
+    const byUser = otherPredsByMatch.get(match.id);
+    return sortedParticipants.map((p) => {
+      const pred = byUser?.get(p.user_id) ?? null;
+      return {
+        userId: p.user_id,
+        displayName: p.display_name,
+        home_score: pred?.home_score ?? null,
+        away_score: pred?.away_score ?? null,
+        scoring: pred ? scoreFor(match, pred.home_score, pred.away_score) : null,
+      };
+    });
   }
 
   const liveCount = currentDay?.matches.filter(isLiveMatch).length ?? 0;
@@ -186,6 +241,7 @@ export function CalendarClient({ matches, predictions, scoringRules }: Props) {
                 match={match}
                 prediction={predMap.get(match.id) ?? null}
                 scoring={getScoring(match)}
+                others={getOthers(match)}
               />
             ))}
           </div>
