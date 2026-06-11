@@ -16,10 +16,18 @@ export default async function MainLayout({
     redirect("/login");
   }
 
+  const { data: firstPart } = await supabase
+    .from("participations")
+    .select("pool_id")
+    .eq("user_id", user.id)
+    .order("joined_at", { ascending: false })
+    .limit(1)
+    .single();
+
   return (
     <>
       {children}
-      <BottomNav />
+      {firstPart && <BottomNav firstPoolId={firstPart.pool_id} />}
     </>
   );
 }

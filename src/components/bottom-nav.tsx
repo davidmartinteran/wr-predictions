@@ -11,12 +11,9 @@ function extractPoolId(pathname: string): string | null {
   return match[1];
 }
 
-export function BottomNav({ poolId: poolIdProp }: { poolId?: string } = {}) {
+export function BottomNav({ firstPoolId }: { firstPoolId: string }) {
   const pathname = usePathname();
-  const poolId = poolIdProp ?? extractPoolId(pathname);
-
-  if (!poolId) return null;
-
+  const poolId = extractPoolId(pathname) ?? firstPoolId;
   const base = `/pools/${poolId}`;
 
   const tabs = [
