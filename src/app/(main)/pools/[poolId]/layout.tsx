@@ -23,9 +23,10 @@ export default async function PoolLayout({
   if (!pool) notFound();
 
   return (
-    // flex-1 (no h-dvh): h-dvh mide la pantalla completa e ignora el padding
-    // safe-area del body, desplazando todo el layout hacia abajo en PWA
-    <div className="flex flex-col flex-1 min-h-0">
+    // h-dvh (altura absoluta, inmune a soft-nav) con AMBOS insets consolidados
+    // aquí, no en el body: pt = status bar, y el pb-safe-bottom va en <main>.
+    // Asi el modelo de cajas cuadra sin depender de la cadena de padres flex.
+    <div className="flex flex-col h-dvh pt-[env(safe-area-inset-top)]">
       <TopBar
         poolId={poolId}
         poolName={pool.name}
