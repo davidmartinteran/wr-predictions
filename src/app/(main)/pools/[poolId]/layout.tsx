@@ -23,7 +23,9 @@ export default async function PoolLayout({
   if (!pool) notFound();
 
   return (
-    <div className="flex flex-col h-dvh">
+    // flex-1 (no h-dvh): h-dvh mide la pantalla completa e ignora el padding
+    // safe-area del body, desplazando todo el layout hacia abajo en PWA
+    <div className="flex flex-col flex-1 min-h-0">
       <TopBar
         poolId={poolId}
         poolName={pool.name}
