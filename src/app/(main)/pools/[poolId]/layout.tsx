@@ -30,7 +30,7 @@ export default async function PoolLayout({
         participantCount={participantCount}
         displayName={participation.display_name}
       />
-      <main className="flex flex-col flex-1 pb-16 lg:pb-0 min-h-0 overflow-hidden">{children}</main>
+      <main className="flex flex-col flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0 min-h-0 overflow-hidden">{children}</main>
     </div>
   );
 }

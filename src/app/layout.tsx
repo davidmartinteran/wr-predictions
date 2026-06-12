@@ -29,6 +29,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  // Necesario para que env(safe-area-inset-*) reporte valores reales en
+  // móvil (home indicator iOS / barra de gestos Android edge-to-edge)
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -41,7 +44,7 @@ export default function RootLayout({
       lang="es"
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-dvh overflow-hidden antialiased`}
     >
-      <body className="h-full flex flex-col overflow-hidden bg-background text-foreground">
+      <body className="h-full flex flex-col overflow-hidden bg-background text-foreground pt-[env(safe-area-inset-top)]">
         <SWRegister />
         {children}
       </body>

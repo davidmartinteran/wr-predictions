@@ -86,7 +86,7 @@ export default async function PoolsListPage() {
         </nav>
       </header>
 
-      <main className="flex-1 pb-20 lg:pb-0 min-h-0 overflow-y-auto">
+      <main className="flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] lg:pb-0 min-h-0 overflow-y-auto">
         <div className="mx-auto w-full max-w-2xl px-4 py-8 lg:py-12">
           {rows.length > 0 && (
             <header className="flex items-center justify-between mb-8">

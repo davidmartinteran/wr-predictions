@@ -21,8 +21,8 @@ export function PoolsBottomNav({ firstPoolId }: Props) {
   ] as const;
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur-sm lg:hidden">
-      <div className="flex h-16 items-center justify-around pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-zinc-800/80 bg-zinc-950/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <div className="flex h-16 items-center justify-around">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = href === "/pools";
           return (
