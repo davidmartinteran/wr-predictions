@@ -23,10 +23,13 @@ export default async function PoolLayout({
   if (!pool) notFound();
 
   return (
-    // h-dvh (altura absoluta, inmune a soft-nav) con AMBOS insets consolidados
-    // aquí, no en el body: pt = status bar, y el pb-safe-bottom va en <main>.
-    // Asi el modelo de cajas cuadra sin depender de la cadena de padres flex.
-    <div className="flex flex-col h-dvh pt-[env(safe-area-inset-top)]">
+    // fixed inset-0 (no h-dvh): en el WebView de Android (PWA standalone) la
+    // unidad dvh se queda obsoleta tras la navegacion client-side y el
+    // contenedor (que persiste entre pestañas) mantiene una altura erronea,
+    // empujando la clasificacion bajo el nav. fixed inset-0 ancla el shell a
+    // los bordes del viewport en cada reflow, inmune a esa obsolescencia.
+    // pt = status bar; el pb-safe-bottom va en <main>.
+    <div className="fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
       <TopBar
         poolId={poolId}
         poolName={pool.name}

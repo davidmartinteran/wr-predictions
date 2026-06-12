@@ -48,7 +48,7 @@ export default async function PoolsListPage() {
   const firstPoolId = rows[0]?.pool_id;
 
   return (
-    <div className="flex flex-col h-dvh pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
       <header className="hidden lg:flex h-14 border-b border-zinc-800/80 bg-zinc-950/95 backdrop-blur shrink-0 items-center px-6">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-primary">

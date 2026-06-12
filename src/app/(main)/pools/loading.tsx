@@ -20,7 +20,7 @@ function PoolCardSkeleton() {
 
 export default function PoolsListLoading() {
   return (
-    <div className="flex flex-col h-dvh pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
       {/* Desktop header — matches actual header */}
       <header className="hidden lg:flex h-14 border-b border-zinc-800/80 bg-zinc-950/95 shrink-0 items-center px-6">
         <div className="flex items-center gap-2.5">
