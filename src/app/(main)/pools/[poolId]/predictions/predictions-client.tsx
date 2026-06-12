@@ -757,7 +757,7 @@ export function PredictionsClient({
           la clasificacion bajo el BottomNav (peor en la porra ajena por el
           header extra; antes solo visible en web por no tener el inset que lo
           amortiguaba en PWA). */}
-      <div className="flex flex-col flex-1 min-h-0 lg:hidden">
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden lg:hidden">
         <MobileLayout {...sharedProps} />
       </div>
       <div className="hidden lg:contents">
@@ -896,7 +896,7 @@ function MobileLayout(props: LayoutProps) {
   const accentColor = VIEW_COLORS[viewMode];
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Frozen banner (own-closed) */}
       {viewMode === "own-closed" && (
         <div className="px-5 py-2.5 border-b border-amber-500/20 bg-amber-500/8 flex items-center gap-2">
