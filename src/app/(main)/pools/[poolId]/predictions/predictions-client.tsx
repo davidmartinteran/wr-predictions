@@ -751,7 +751,13 @@ export function PredictionsClient({
 
   return (
     <>
-      <div className="contents lg:hidden">
+      {/* Contenedor flex real (no display:contents): este propaga la altura
+          acotada al re-render del soft-nav. Con `contents` la cadena flex se
+          rompia al navegar y la columna crecia a su altura intrinseca, dejando
+          la clasificacion bajo el BottomNav (peor en la porra ajena por el
+          header extra; antes solo visible en web por no tener el inset que lo
+          amortiguaba en PWA). */}
+      <div className="flex flex-col flex-1 min-h-0 lg:hidden">
         <MobileLayout {...sharedProps} />
       </div>
       <div className="hidden lg:contents">
