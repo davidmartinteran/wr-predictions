@@ -17,15 +17,15 @@
 | Área | Estado | Notas |
 |---|---|---|
 | Supabase project | Activo | `funcrmqctwjoiovtccbh`, región eu-west-1, Postgres 17 |
-| DB Schema | 7 migraciones aplicadas | tournaments + pools (multi-porra), 12+ tablas, RLS + trigger join |
-| Data seeding | Completo | 48 equipos, 72 partidos de grupos, 1 pool, 1 participación |
+| DB Schema | 17 migraciones aplicadas | tournaments + pools (multi-porra), 12+ tablas, RLS + trigger join. 015-017: cron cada minuto, 32 placeholders eliminatorias, `winner_team` + `predicted_team_rounds` |
+| Data seeding | Completo | 48 equipos, 72 partidos de grupos + 32 placeholders de eliminatorias (R32→final, con kickoff/sede/`api_fixture_id` de ESPN), 1 pool, 7 participaciones |
 | Auth (Magic Link) | Funcional (limitada) | Login + callback + dev login. **Pendiente: SMTP propio + redirect URL producción** |
-| Scoring engine | Completo + 69 tests | Scoring v2: 3 categorías (results/classifications/extras), 39 unit + 30 simulación |
+| Scoring engine | Completo + 91 tests | Scoring v2: 3 categorías (results/classifications/extras), 39 unit + 30 simulación + 13 nuevos (actual-rounds, predicted-rounds) + 9 más |
 | Bracket engine | Completo | Standings, tiebreaks, R32→Final con estructura FIFA oficial + 495 combinaciones Anexo C |
 | Extras section | Completo | 5 categorías con player autocomplete + team selector |
-| PWA | Instalable | Manifest + SW + iconos placeholder (PM 2026). Deploy en Vercel con HTTPS |
+| PWA | Instalable | Manifest + SW + iconos placeholder (PM 2026). Deploy en Vercel con HTTPS. Safe-area insets corregidos (`viewport-fit=cover`, `h-dvh`→`flex-1`) |
 | CI/CD | Activo | Push a `main` → deploy automático en Vercel |
-| Resultados automáticos | Activo | ESPN (API no oficial, gratis) → Edge Function `poll-results` + pg_cron cada 5 min. Recalcula `scores` (RESULTS) al terminar cada partido |
+| Resultados automáticos | Activo | ESPN (API no oficial, gratis) → Edge Function `poll-results` + pg_cron **cada minuto**. Recalcula `scores` RESULTS (grupos) y CLASSIFICATIONS (eliminatorias) automáticamente. Pase de cruces cada 30 min |
 
 ### Pantallas diseñadas (DOCS/design/)
 
@@ -110,10 +110,15 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 - [ ] Edge Function: reveal-pool cron (LOCKED → REVEALED el 11/jun 18:00)
 - [ ] E2E test anonimato (Playwright: pre-reveal no se ven predicciones ajenas)
 
+### Próximas releases (comprometidas)
+
+- [ ] **Notificaciones por favoritos** — marcar un partido como favorito y recibir: (a) notificación previa 15 min antes del kickoff con frases de Vicente Maroto, (b) notificación final con el resultado al acabar. Requiere Web Push en la PWA (suscripción + permiso), tabla de favoritos por usuario y disparo desde `poll-results`/pg_cron.
+- [ ] **Enlace predicción → calendario** — en la vista de predicción, cada partido enlaza al mismo partido en el calendario para ver cómo va (en vivo/resultado) o cuándo se juega.
+
 ### Media prioridad
 
-- [x] Resultados automáticos — ✅ ESPN scoreboard API (gratis, sin key) via Edge Function `poll-results` + pg_cron cada 5 min. Secretos en Vault (`project_url`, `service_role_key`)
-- [ ] Recalcular CLASSIFICATIONS y EXTRAS al cerrar fases (hoy solo RESULTS es automático; extras siguen siendo manuales via pestaña Admin)
+- [x] Resultados automáticos — ✅ ESPN scoreboard API (gratis, sin key) via Edge Function `poll-results` + pg_cron cada minuto. Secretos en Vault (`project_url`, `service_role_key`)
+- [x] Recalcular CLASSIFICATIONS al avanzar el torneo — ✅ automático y progresivo (12/jun): `predicted_team_rounds` materializado + `winner_team` + recálculo en `poll-results`. EXTRAS sigue manual via pestaña Admin
 - [ ] TopBar — datos dinámicos (nombre pool, nº jugadores, user)
 - [ ] Leaderboard: pulir estilos finales, verificar con datos reales
 - [ ] Actualizar `src/data/players.ts` con convocatorias oficiales cuando se publiquen (~primera semana junio)
@@ -138,7 +143,9 @@ Ficheros: `screens-mobile.jsx` + `screens-desktop.jsx`, renderizados en `Porra M
 
 ## Decisiones pendientes
 
-- ~~Fuente de resultados live~~ **Resuelto (2026-06-11):** ESPN scoreboard API no oficial (`site.api.espn.com/.../soccer/fifa.world/scoreboard`) — gratis, sin key, estado y marcador en vivo. Fallback: override manual del admin (`matches.source='MANUAL'` nunca se pisa). OpenFootball descartado (actualización manual ~1×/día); API-Football free no cubre 2026. Alias de códigos ESPN→BD: HAI→HTI (resto coinciden).
+- ~~Fuente de resultados live~~ **Resuelto (2026-06-11):** ESPN scoreboard API no oficial (`site.api.espn.com/.../soccer/fifa.world/scoreboard`) — gratis, sin key, estado y marcador en vivo. Fallback: override manual del admin (`matches.source='MANUAL'` nunca se pisa). OpenFootball descartado (actualización manual ~1×/día); API-Football free no cubre 2026. Alias de códigos ESPN→BD: HAI→HTI (resto coinciden, verificado 1:1).
+- ~~Scoring automático de eliminatorias~~ **Resuelto (2026-06-12):** `predicted_team_rounds` materializa la ronda predicha por usuario/equipo desde la porra congelada (`scripts/materialize-predicted-rounds.ts`, re-ejecutable). `matches.winner_team` se escribe del flag `winner` de ESPN (válido en penaltis). `poll-results` deriva rondas reales definitivas (`deriveActualRounds`) y recalcula CLASSIFICATIONS con `scoreElimination`. El 3er puesto no altera la ronda (ambos SF). Primer reparto grande al cerrar grupos (27-28 jun).
+- **Fechas ESPN (gotcha):** ESPN agrupa eventos por día US Eastern (UTC-4); los kickoffs de madrugada UTC caen en el día anterior. `poll-results` pide siempre un rango que empieza un día antes (causó el fallo del Corea-Chequia del 12/jun).
 
 ---
 
