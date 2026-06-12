@@ -911,7 +911,9 @@ function MobileLayout(props: LayoutProps) {
       )}
 
       {/* Viewing other player header */}
-      {viewMode === "viewing-other" && (
+      {/* TEMP DEBUG: cintillo desactivado para aislar si es la causa del
+          corte de la clasificacion en mobile. Revertir tras la prueba. */}
+      {false && viewMode === "viewing-other" && (
         <ViewingOtherHeader
           targetDisplayName={targetDisplayName ?? "Jugador"}
           poolParticipants={poolParticipants ?? []}
