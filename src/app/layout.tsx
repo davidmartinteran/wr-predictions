@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { SWRegister } from "@/components/sw-register";
+import { DebugOverlay } from "@/components/debug-overlay";
 import "./globals.css";
 
 const inter = Inter({
@@ -46,6 +47,7 @@ export default function RootLayout({
     >
       <body className="h-full flex flex-col overflow-hidden bg-background text-foreground">
         <SWRegister />
+        <DebugOverlay />
         {children}
       </body>
     </html>
