@@ -21,6 +21,7 @@ export async function CalendarLoader({
     { data: matches },
     { data: predictions },
     { data: poolData },
+    { data: favorites },
   ] = await Promise.all([
     supabase
       .from("matches")
@@ -45,6 +46,10 @@ export async function CalendarLoader({
       .select("scoring_rules")
       .eq("id", poolId)
       .single(),
+    supabase
+      .from("match_favorites")
+      .select("match_id")
+      .eq("user_id", currentUserId),
   ]);
 
   const formattedMatches = (matches ?? []).map((m) => ({
@@ -78,6 +83,7 @@ export async function CalendarLoader({
   }));
 
   const scoringRules = normalizePoolRules(poolData?.scoring_rules);
+  const favoriteMatchIds = (favorites ?? []).map((f) => f.match_id);
 
   // Pronósticos de los demás jugadores: solo post-deadline. El RLS de
   // predictions_match es la barrera real (pool REVEALED/LIVE/CLOSED).
@@ -122,6 +128,7 @@ export async function CalendarLoader({
       otherPredictions={otherPredictions}
       participants={participants}
       scoringRules={scoringRules}
+      favoriteMatchIds={favoriteMatchIds}
     />
   );
 }

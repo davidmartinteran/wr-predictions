@@ -33,6 +33,7 @@ export async function PredictionsLoader({
     { data: knockoutPredictions },
     { data: tiebreakRows },
     { data: allTeams },
+    { data: favorites },
   ] = await Promise.all([
     supabase
       .from("matches")
@@ -71,6 +72,10 @@ export async function PredictionsLoader({
       .select("id, name, code, flag_emoji")
       .eq("tournament_id", tournamentId)
       .order("name"),
+    supabase
+      .from("match_favorites")
+      .select("match_id")
+      .eq("user_id", currentUserId),
   ]);
 
   let adminResults: { kind: string; value: string }[] = [];
@@ -175,6 +180,7 @@ export async function PredictionsLoader({
       isAdmin={isAdmin}
       adminResults={adminResults}
       deadline={deadline}
+      favoriteMatchIds={(favorites ?? []).map((f) => f.match_id)}
     />
   );
 }

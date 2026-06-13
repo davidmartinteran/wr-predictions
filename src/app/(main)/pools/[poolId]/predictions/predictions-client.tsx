@@ -128,6 +128,7 @@ type Props = {
   isAdmin?: boolean;
   adminResults?: { kind: string; value: string }[];
   deadline?: string;
+  favoriteMatchIds?: string[];
 };
 
 function formatDeadlineBadge(iso: string): string {
@@ -170,6 +171,7 @@ export function PredictionsClient({
   isAdmin,
   adminResults,
   deadline,
+  favoriteMatchIds,
 }: Props) {
   const [activeSection, setActiveSection] = useState<Section>("groups");
   const [activeGroup, setActiveGroup] = useState("A");
@@ -217,6 +219,17 @@ export function PredictionsClient({
     }
     return initial;
   });
+  const [favSet, setFavSet] = useState<Set<string>>(
+    () => new Set(favoriteMatchIds ?? []),
+  );
+  const handleToggleFavorite = useCallback((matchId: string, newValue: boolean) => {
+    setFavSet((prev) => {
+      const next = new Set(prev);
+      if (newValue) next.add(matchId);
+      else next.delete(matchId);
+      return next;
+    });
+  }, []);
   const [selectedThirds, setSelectedThirds] = useState<string[]>([]);
   const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(
     null,
@@ -747,6 +760,8 @@ export function PredictionsClient({
     handleClearGroup,
     handleClearExtras,
     handleClearBracket,
+    favSet,
+    handleToggleFavorite,
   };
 
   return (
@@ -842,6 +857,8 @@ type LayoutProps = {
   handleClearGroup: (group: string) => void;
   handleClearExtras: () => void;
   handleClearBracket: () => void;
+  favSet: Set<string>;
+  handleToggleFavorite: (matchId: string, newValue: boolean) => void;
 };
 
 function MobileLayout(props: LayoutProps) {
@@ -891,6 +908,8 @@ function MobileLayout(props: LayoutProps) {
     handleClearGroup,
     handleClearExtras,
     handleClearBracket,
+    favSet,
+    handleToggleFavorite,
   } = props;
 
   const accentColor = VIEW_COLORS[viewMode];
@@ -1058,6 +1077,8 @@ function MobileLayout(props: LayoutProps) {
                     disabled={disabled}
                     onScoreChange={handleScoreChange}
                     complete={isMatchComplete(match)}
+                    isFavorited={favSet.has(match.id)}
+                    onToggleFavorite={handleToggleFavorite}
                   />
                   {viewMode === "viewing-other" && ownScores && (
                     <OwnPredictionLine
@@ -1359,6 +1380,8 @@ function DesktopLayout(
     handleClearGroup,
     handleClearExtras,
     handleClearBracket,
+    favSet,
+    handleToggleFavorite,
   } = props;
   const accentColor = VIEW_COLORS[viewMode];
   const activeGroupTeams = useMemo(() => {
@@ -1749,6 +1772,8 @@ function DesktopLayout(
                               time={time}
                               disabled={disabled}
                               onScoreChange={handleScoreChange}
+                              isFavorited={favSet.has(match.id)}
+                              onToggleFavorite={handleToggleFavorite}
                             />
                             {viewMode === "viewing-other" && ownScores && (
                               <OwnPredictionLine
@@ -2031,6 +2056,8 @@ function DesktopMatchCard({
   time,
   disabled,
   onScoreChange,
+  isFavorited,
+  onToggleFavorite,
 }: {
   match: Match;
   homeScore: number | null;
@@ -2044,7 +2071,21 @@ function DesktopMatchCard({
     home: number | null,
     away: number | null,
   ) => void;
+  isFavorited?: boolean;
+  onToggleFavorite?: (matchId: string, newValue: boolean) => void;
 }) {
+  const [favLocal, setFavLocal] = useState(isFavorited ?? false);
+  const [, startFavTransition] = useTransition();
+
+  function handleToggleFav() {
+    const next = !favLocal;
+    setFavLocal(next);
+    onToggleFavorite?.(match.id, next);
+    startFavTransition(async () => {
+      const { toggleFavorite } = await import("@/lib/favorites/actions");
+      await toggleFavorite({ match_id: match.id });
+    });
+  }
   const handleHome = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value.replace(/\D/g, "");
@@ -2074,6 +2115,18 @@ function DesktopMatchCard({
         <div>
           {day} · {time}
         </div>
+        <button
+          onClick={handleToggleFav}
+          className="p-0.5 transition-colors"
+          aria-label={favLocal ? "Quitar de favoritos" : "Añadir a favoritos"}
+        >
+          <Star
+            className={cn(
+              "h-3.5 w-3.5 transition-colors",
+              favLocal ? "text-amber-400 fill-amber-400" : "text-zinc-600"
+            )}
+          />
+        </button>
       </div>
       <div className="flex items-center gap-2 xl:gap-4 3xl:gap-3">
         <div className="flex items-center gap-2 xl:gap-3 3xl:gap-2.5 flex-1 min-w-0">
