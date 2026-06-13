@@ -69,6 +69,32 @@ export type Database = {
           },
         ]
       }
+      match_favorites: {
+        Row: {
+          user_id: string
+          match_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          match_id: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          match_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_favorites_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       matches: {
         Row: {
           api_fixture_id: number | null
@@ -141,6 +167,38 @@ export type Database = {
             columns: ["tournament_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_log: {
+        Row: {
+          id: string
+          match_id: string
+          kind: string
+          sent_at: string
+          recipients: number
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          kind: string
+          sent_at?: string
+          recipients?: number
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          kind?: string
+          sent_at?: string
+          recipients?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_log_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
             referencedColumns: ["id"]
           },
         ]
@@ -512,6 +570,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          keys_p256dh: string
+          keys_auth: string
+          user_agent: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          keys_p256dh: string
+          keys_auth: string
+          user_agent?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          endpoint?: string
+          keys_p256dh?: string
+          keys_auth?: string
+          user_agent?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       scores: {
         Row: {
