@@ -29,21 +29,91 @@ type Subscription = {
 };
 
 const PRE_MATCH_PHRASES = [
-  "No te pierdas el {home} - {away}. Partidazo!",
-  "En 15 min arranca el {home} - {away}. Tienes tu pronostico listo?",
-  "{home} contra {away} esta a punto de empezar. Vamos!",
-  "Se viene el {home} - {away}. Calienta motores!",
-  "Atencion: {home} vs {away} en 15 minutitos!",
-  "El {home} - {away} esta al caer. No te lo pierdas!",
-  "Falta nada para el {home} - {away}. A disfrutar!",
-  "Que empiece el espectaculo! {home} vs {away} en nada.",
+  "Ojo al {home} - {away}, barra libre de goles. Esto está clarísimo",
+  "Atención al {home} - {away}. Partidazo, buen momento para pillar el sillón",
+  "En 15 min {home} vs {away}. Cervecita fría y mando preparados",
+  "Se viene el {home} - {away}. Hoy hay fútbol del bueno, barra y manta",
+  "15 minutitos para el {home} - {away}. Como para perdérselo",
+  "Esto va a ser un partidazo, el {home} - {away} en nada. Baja la persiana",
+  "El {home} - {away} en nada. Con dos cañas y este partido no se necesita más",
+  "Venga que empieza el {home} - {away}. Hoy se cena viendo fútbol y el que quiera algo que se lo haga",
+  "Ojo que arranca el {home} - {away}. Aquí sabemos más que el entrenador",
+  "Vamos con el {home} - {away}. Si no lo ves mañana no vengas a opinar",
+  "En 15 min {home} vs {away}. Hoy no se baja al perro hasta que acabe esto",
+  "{home} - {away} en 15 min. Baja a por hielos que esto hay que verlo bien",
+  "Alerta Mundial: {home} vs {away}. Se suspenden planes familiares hasta nuevo aviso",
+  "El {home} - {away} está al caer. Quien ponga Netflix hoy no tiene perdón",
+  "En 15 min {home} vs {away}. Ponme una de jamón y baja el volumen de todo lo demás",
+  "Se viene {home} - {away}. Esto no es fútbol, esto es poesía con botas",
+  "{home} vs {away} en nada. Los del curro pueden esperar, esto no",
+  "Arranca el {home} - {away}. Apaga las luces, sube el volumen, esto es sagrado",
+  "15 min para el {home} - {away}. Que nadie llame, que nadie escriba, que nadie respire fuerte",
+  "{home} - {away} a punto de empezar. Hoy el VAR soy yo desde el sofá",
 ];
 
-function pickPhrase(home: string, away: string): string {
+const POST_MATCH_PHRASES: Record<string, string[]> = {
+  victory: [
+    "Hoy le toca croquejas a {loser}",
+    "Hoy no le sonríe a {loser} ni la parienta",
+    "Fútbol champagne de {winner}",
+    "A {loser} hoy le toca gritamisú de postre",
+    "{loser} que recoja los conos y apague las luces",
+  ],
+  blowout: [
+    "Paliza. A la ducha y para casa",
+    "Alguien que avise a {loser} que esto no era un entreno",
+    "A {loser} le ha faltado pedir la cuenta y marcharse",
+    "Que alguien llame a {loser} un taxi, que aquí ya no pintan nada",
+  ],
+  draw_zero: [
+    "Estos han cogido apuntes de Bordalás",
+    "Partido para olvidar, nos han robado 90 minutos",
+    "Menos goles que conversación en un ascensor",
+    "Lo más emocionante ha sido el descanso",
+  ],
+  draw_goals: [
+    "Ni pa ti ni pa mí, que gane otro que tienen cositas que hacer",
+    "Tablas. Como el matrimonio, aquí nadie gana pero todos opinan",
+    "Empate. Tortilla para los dos y sin cebolla",
+    "Empate. Aquí el único que gana es el bar",
+  ],
+};
+
+function classifyResult(
+  homeScore: number,
+  awayScore: number,
+): { category: string; winner: "home" | "away" | null } {
+  if (homeScore === awayScore) {
+    return {
+      category: homeScore === 0 ? "draw_zero" : "draw_goals",
+      winner: null,
+    };
+  }
+  const diff = Math.abs(homeScore - awayScore);
+  const winner = homeScore > awayScore ? "home" as const : "away" as const;
+  return {
+    category: diff >= 3 ? "blowout" : "victory",
+    winner,
+  };
+}
+
+function pickPreMatchPhrase(home: string, away: string): string {
   const idx = Math.floor(Math.random() * PRE_MATCH_PHRASES.length);
   return PRE_MATCH_PHRASES[idx]
     .replace("{home}", home)
     .replace("{away}", away);
+}
+
+function pickPostMatchPhrase(
+  category: string,
+  winnerName: string,
+  loserName: string,
+): string {
+  const phrases = POST_MATCH_PHRASES[category] ?? POST_MATCH_PHRASES.victory;
+  const idx = Math.floor(Math.random() * phrases.length);
+  return phrases[idx]
+    .replace(/\{winner\}/g, winnerName)
+    .replace(/\{loser\}/g, loserName);
 }
 
 function json(body: unknown, status = 200): Response {
@@ -182,7 +252,7 @@ Deno.serve(async () => {
 
       const homeName = match.home_team?.name ?? "Equipo";
       const awayName = match.away_team?.name ?? "Equipo";
-      const phrase = pickPhrase(homeName, awayName);
+      const phrase = pickPreMatchPhrase(homeName, awayName);
 
       let sent = 0;
       for (const sub of subs) {
@@ -257,12 +327,19 @@ Deno.serve(async () => {
 
       const homeName = match.home_team?.name ?? "?";
       const awayName = match.away_team?.name ?? "?";
+      const hs = match.home_score!;
+      const as_ = match.away_score!;
+      const { category, winner } = classifyResult(hs, as_);
+      const winnerName = winner === "home" ? homeName : awayName;
+      const loserName = winner === "home" ? awayName : homeName;
+      const phrase = pickPostMatchPhrase(category, winnerName, loserName);
+      const scoreLine = `${homeName} ${hs}-${as_} ${awayName}`;
 
       let sent = 0;
       for (const sub of subs) {
         const result = await sendPush(sub, {
-          title: `Final: ${homeName} ${match.home_score} - ${match.away_score} ${awayName}`,
-          body: `${homeName} ${match.home_score} - ${match.away_score} ${awayName}`,
+          title: scoreLine,
+          body: `${scoreLine}. ${phrase}`,
           tag: `post-match-${match.id}`,
           url: "/",
         }, vapidDetails);
