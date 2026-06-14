@@ -40,11 +40,27 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
 
   const registration = await navigator.serviceWorker.ready;
 
+  const appServerKey = urlBase64ToUint8Array(
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  );
+  const appServerKeyB64 = btoa(String.fromCharCode(...appServerKey));
+
+  // Si ya existe una suscripcion con OTRA clave (rotacion de VAPID), hay que
+  // eliminarla antes de re-suscribir o el navegador lanza InvalidStateError.
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) {
+    const existingKey = existing.options.applicationServerKey;
+    const sameKey =
+      existingKey != null &&
+      btoa(String.fromCharCode(...new Uint8Array(existingKey))) ===
+        appServerKeyB64;
+    if (sameKey) return existing;
+    await existing.unsubscribe();
+  }
+
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    ) as BufferSource,
+    applicationServerKey: appServerKey as BufferSource,
   });
 
   return subscription;

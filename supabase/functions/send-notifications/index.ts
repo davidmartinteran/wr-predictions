@@ -162,41 +162,10 @@ Deno.serve(async () => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // VAPID keys from Vault
-    const { data: secrets } = await supabase.rpc("get_vault_secrets", undefined);
-    const secretMap = new Map<string, string>();
-    if (secrets) {
-      for (const s of secrets as { name: string; decrypted_secret: string }[]) {
-        secretMap.set(s.name, s.decrypted_secret);
-      }
-    }
-
-    // Fallback: read from vault.decrypted_secrets directly
-    if (!secretMap.has("vapid_public_key")) {
-      const { data: vaultRows } = await supabase
-        .from("vault.decrypted_secrets")
-        .select("name, decrypted_secret")
-        .in("name", ["vapid_public_key", "vapid_private_key", "vapid_subject"]);
-      // If the above doesn't work (vault not exposed as table), use raw SQL
-      if (!vaultRows?.length) {
-        const { data: sqlRows } = await supabase.rpc("sql", {
-          query: `SELECT name, decrypted_secret FROM vault.decrypted_secrets WHERE name IN ('vapid_public_key', 'vapid_private_key', 'vapid_subject')`,
-        });
-        if (sqlRows) {
-          for (const r of sqlRows as { name: string; decrypted_secret: string }[]) {
-            secretMap.set(r.name, r.decrypted_secret);
-          }
-        }
-      } else {
-        for (const r of vaultRows) {
-          secretMap.set(r.name, r.decrypted_secret);
-        }
-      }
-    }
-
-    const vapidPublic = secretMap.get("vapid_public_key") ?? Deno.env.get("VAPID_PUBLIC_KEY");
-    const vapidPrivate = secretMap.get("vapid_private_key") ?? Deno.env.get("VAPID_PRIVATE_KEY");
-    const vapidSubject = secretMap.get("vapid_subject") ?? Deno.env.get("VAPID_SUBJECT") ?? "mailto:davidmartinteran@gmail.com";
+    // VAPID keys desde secrets de Edge Functions (supabase secrets set …)
+    const vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY");
+    const vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY");
+    const vapidSubject = Deno.env.get("VAPID_SUBJECT") ?? "mailto:davidmartinteran@gmail.com";
 
     if (!vapidPublic || !vapidPrivate) {
       return json({ skipped: true, reason: "no VAPID keys configured" });
