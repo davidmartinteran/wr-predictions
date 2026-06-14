@@ -151,7 +151,9 @@ async function sendPush(
     return { ok: true, gone: false };
   } catch (err: unknown) {
     const status = (err as { statusCode?: number }).statusCode;
-    if (status === 410 || status === 404) {
+    // 410/404: endpoint caducado. 403: la suscripcion se creo con otra clave
+    // VAPID (tras una rotacion) y ya no es valida -> tambien se limpia.
+    if (status === 410 || status === 404 || status === 403) {
       return { ok: false, gone: true };
     }
     console.error(`Push failed for ${sub.endpoint}:`, err);
