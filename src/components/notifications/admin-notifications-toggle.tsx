@@ -46,14 +46,14 @@ export function AdminNotificationsToggle({
         aria-checked={on}
         aria-label="Notificaciones de la porra"
         className={cn(
-          "relative h-6 w-11 rounded-full transition-colors shrink-0 disabled:opacity-60",
+          "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-60",
           on ? "bg-primary" : "bg-zinc-700",
         )}
       >
         <span
           className={cn(
-            "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-            on ? "translate-x-[22px]" : "translate-x-0.5",
+            "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+            on ? "translate-x-5" : "translate-x-0",
           )}
         />
       </button>
