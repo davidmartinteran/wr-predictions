@@ -1,17 +1,21 @@
-// Edge Function send-notifications — notificaciones push para partidos favoritos.
+// Edge Function send-notifications — notificaciones push por porra.
 //
 // Invocada por pg_cron cada minuto (ver migracion 018). Flujo:
-//   1. PRE_MATCH: busca partidos con kickoff en los proximos 16 min que tengan
-//      favoritos y no esten ya en notification_log.
-//   2. POST_MATCH: busca partidos FINISHED con favoritos sin notificacion enviada.
-//   3. Para cada caso, envia Web Push a todos los dispositivos suscritos.
-//   4. Limpia suscripciones muertas (410/404).
+//   1. Determina los torneos con al menos una porra que tenga
+//      notifications_enabled = true, y quienes son sus participantes.
+//   2. PRE_MATCH: partidos de esos torneos con kickoff en los proximos 16 min
+//      sin entrada en notification_log.
+//   3. POST_MATCH: partidos FINISHED de esos torneos sin notificacion enviada.
+//   4. Cada partido se notifica una sola vez al conjunto (deduplicado) de
+//      usuarios suscritos que participan en alguna porra activa del torneo.
+//   5. Limpia suscripciones muertas (410/404).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
 
 type MatchRow = {
   id: string;
+  tournament_id: string;
   kickoff: string;
   status: string;
   home_score: number | null;
@@ -181,43 +185,79 @@ Deno.serve(async () => {
     let totalSent = 0;
     const staleEndpoints: string[] = [];
 
+    // --- Porras con notificaciones activas ---
+    const { data: enabledPools } = await supabase
+      .from("pools")
+      .select("id, tournament_id")
+      .eq("notifications_enabled", true);
+
+    if (!enabledPools?.length) {
+      return json({ ok: true, sent: 0, staleRemoved: 0, reason: "no pools enabled" });
+    }
+
+    // tournament_id -> pool_ids con notificaciones activas
+    const poolsByTournament = new Map<string, string[]>();
+    for (const p of enabledPools) {
+      const arr = poolsByTournament.get(p.tournament_id) ?? [];
+      arr.push(p.id);
+      poolsByTournament.set(p.tournament_id, arr);
+    }
+    const enabledTournamentIds = [...poolsByTournament.keys()];
+
+    // Suscripciones (deduplicadas por endpoint) de los participantes de las
+    // porras activas de un torneo. Un partido se notifica una sola vez a este
+    // conjunto aunque el usuario esté en varias porras del mismo torneo.
+    async function subsForTournament(tournamentId: string): Promise<Subscription[]> {
+      const poolIds = poolsByTournament.get(tournamentId);
+      if (!poolIds?.length) return [];
+      const { data: parts } = await supabase
+        .from("participations")
+        .select("user_id")
+        .in("pool_id", poolIds);
+      const userIds = [...new Set((parts ?? []).map((p) => p.user_id))];
+      if (!userIds.length) return [];
+      const { data: subs } = await supabase
+        .from("push_subscriptions")
+        .select("id, user_id, endpoint, keys_p256dh, keys_auth")
+        .in("user_id", userIds)
+        .returns<Subscription[]>();
+      const seen = new Set<string>();
+      return (subs ?? []).filter((s) => {
+        if (seen.has(s.endpoint)) return false;
+        seen.add(s.endpoint);
+        return true;
+      });
+    }
+
+    // Idempotencia: match_ids ya notificados, cargados de una vez.
+    const { data: loggedRows } = await supabase
+      .from("notification_log")
+      .select("match_id, kind");
+    const loggedSet = new Set(
+      (loggedRows ?? []).map((r) => `${r.kind}:${r.match_id}`),
+    );
+
     // --- PRE_MATCH: partidos con kickoff en los proximos 16 minutos ---
     const { data: preMatches } = await supabase
       .from("matches")
       .select(`
-        id, kickoff, status, home_score, away_score,
+        id, tournament_id, kickoff, status, home_score, away_score,
         home_team:teams!matches_home_team_fkey(name, code),
         away_team:teams!matches_away_team_fkey(name, code)
       `)
+      .in("tournament_id", enabledTournamentIds)
       .neq("status", "FINISHED")
       .gte("kickoff", new Date(now).toISOString())
       .lte("kickoff", new Date(now + 16 * 60_000).toISOString())
       .returns<MatchRow[]>();
 
     for (const match of preMatches ?? []) {
-      // Check notification_log for idempotency
-      const { data: logged } = await supabase
-        .from("notification_log")
-        .select("id")
-        .eq("match_id", match.id)
-        .eq("kind", "PRE_MATCH")
-        .maybeSingle();
-      if (logged) continue;
+      if (loggedSet.has(`PRE_MATCH:${match.id}`)) continue;
 
-      // Get users who favorited this match
-      const { data: favs } = await supabase
-        .from("match_favorites")
-        .select("user_id")
-        .eq("match_id", match.id);
-      if (!favs?.length) continue;
-
-      const userIds = favs.map((f) => f.user_id);
-      const { data: subs } = await supabase
-        .from("push_subscriptions")
-        .select("id, user_id, endpoint, keys_p256dh, keys_auth")
-        .in("user_id", userIds)
-        .returns<Subscription[]>();
-      if (!subs?.length) continue;
+      const subs = await subsForTournament(match.tournament_id);
+      // Sin suscriptores aun: no registramos, por si alguien se suscribe dentro
+      // de la ventana de 16 min antes del kickoff.
+      if (!subs.length) continue;
 
       const homeName = match.home_team?.name ?? "Equipo";
       const awayName = match.away_team?.name ?? "Equipo";
@@ -247,45 +287,22 @@ Deno.serve(async () => {
     const { data: postMatches } = await supabase
       .from("matches")
       .select(`
-        id, kickoff, status, home_score, away_score,
+        id, tournament_id, kickoff, status, home_score, away_score,
         home_team:teams!matches_home_team_fkey(name, code),
         away_team:teams!matches_away_team_fkey(name, code)
       `)
+      .in("tournament_id", enabledTournamentIds)
       .eq("status", "FINISHED")
       .not("home_score", "is", null)
       .not("away_score", "is", null)
       .returns<MatchRow[]>();
 
     for (const match of postMatches ?? []) {
-      const { data: logged } = await supabase
-        .from("notification_log")
-        .select("id")
-        .eq("match_id", match.id)
-        .eq("kind", "POST_MATCH")
-        .maybeSingle();
-      if (logged) continue;
+      if (loggedSet.has(`POST_MATCH:${match.id}`)) continue;
 
-      const { data: favs } = await supabase
-        .from("match_favorites")
-        .select("user_id")
-        .eq("match_id", match.id);
-      if (!favs?.length) {
-        // No favorites for this match, still log it so we don't recheck
-        await supabase.from("notification_log").insert({
-          match_id: match.id,
-          kind: "POST_MATCH",
-          recipients: 0,
-        });
-        continue;
-      }
-
-      const userIds = favs.map((f) => f.user_id);
-      const { data: subs } = await supabase
-        .from("push_subscriptions")
-        .select("id, user_id, endpoint, keys_p256dh, keys_auth")
-        .in("user_id", userIds)
-        .returns<Subscription[]>();
-      if (!subs?.length) {
+      const subs = await subsForTournament(match.tournament_id);
+      if (!subs.length) {
+        // Sin suscriptores: registrar para no reprocesar un partido ya acabado.
         await supabase.from("notification_log").insert({
           match_id: match.id,
           kind: "POST_MATCH",

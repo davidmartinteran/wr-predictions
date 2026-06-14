@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,23 +30,28 @@ import type {
 } from "@/lib/calendar/types";
 import type { OtherPredictionEntry } from "@/components/calendar/calendar-match-card";
 import { NotificationBanner } from "@/components/notifications/notification-banner";
+import { AdminNotificationsToggle } from "@/components/notifications/admin-notifications-toggle";
 
 type Props = {
+  poolId: string;
   matches: CalendarMatch[];
   predictions: CalendarPrediction[];
   otherPredictions: CalendarOtherPrediction[];
   participants: CalendarParticipant[];
   scoringRules: ScoringRules | null;
-  favoriteMatchIds?: string[];
+  isAdmin: boolean;
+  notificationsEnabled: boolean;
 };
 
 export function CalendarClient({
+  poolId,
   matches,
   predictions,
   otherPredictions,
   participants,
   scoringRules,
-  favoriteMatchIds,
+  isAdmin,
+  notificationsEnabled,
 }: Props) {
   const rules = scoringRules ?? DEFAULT_RULES;
   const router = useRouter();
@@ -94,18 +99,6 @@ export function CalendarClient({
       ),
     [participants],
   );
-
-  const [favSet, setFavSet] = useState<Set<string>>(
-    () => new Set(favoriteMatchIds ?? []),
-  );
-  const handleToggleFavorite = useCallback((matchId: string, newValue: boolean) => {
-    setFavSet((prev) => {
-      const next = new Set(prev);
-      if (newValue) next.add(matchId);
-      else next.delete(matchId);
-      return next;
-    });
-  }, []);
 
   const days = useMemo(() => groupMatchesByDay(matches), [matches]);
 
@@ -248,8 +241,16 @@ export function CalendarClient({
             hasNext={currentDayIdx < days.length - 1}
           />
 
-          {/* Notification banner */}
-          <NotificationBanner />
+          {/* Admin: activar/desactivar notificaciones de la porra */}
+          {isAdmin && (
+            <AdminNotificationsToggle
+              poolId={poolId}
+              enabled={notificationsEnabled}
+            />
+          )}
+
+          {/* Banner para aceptar el permiso (solo si la porra las tiene activas) */}
+          {notificationsEnabled && <NotificationBanner poolId={poolId} />}
 
           {/* Match cards */}
           <div className="grid gap-2.5 lg:grid-cols-2">
@@ -260,8 +261,6 @@ export function CalendarClient({
                 prediction={predMap.get(match.id) ?? null}
                 scoring={getScoring(match)}
                 others={getOthers(match)}
-                isFavorited={favSet.has(match.id)}
-                onToggleFavorite={handleToggleFavorite}
               />
             ))}
           </div>

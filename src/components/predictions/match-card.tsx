@@ -1,11 +1,9 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
-import { Star } from "lucide-react";
+import { useCallback } from "react";
 import { TeamBadge } from "./team-badge";
 import { ScoreInput } from "./score-input";
 import { cn } from "@/lib/utils";
-import { toggleFavorite } from "@/lib/favorites/actions";
 
 type Team = {
   id: string;
@@ -25,8 +23,6 @@ type MatchCardProps = {
   disabled?: boolean;
   onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
   complete?: boolean;
-  isFavorited?: boolean;
-  onToggleFavorite?: (matchId: string, newValue: boolean) => void;
 };
 
 export function MatchCard({
@@ -40,21 +36,8 @@ export function MatchCard({
   disabled,
   onScoreChange,
   complete: completeProp,
-  isFavorited,
-  onToggleFavorite,
 }: MatchCardProps) {
   const complete = completeProp ?? (homeScore !== null && awayScore !== null);
-  const [favLocal, setFavLocal] = useState(isFavorited ?? false);
-  const [, startTransition] = useTransition();
-
-  function handleToggleFav() {
-    const next = !favLocal;
-    setFavLocal(next);
-    onToggleFavorite?.(matchId, next);
-    startTransition(async () => {
-      await toggleFavorite({ match_id: matchId });
-    });
-  }
 
   const date = new Date(kickoff);
   const day = date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
@@ -79,26 +62,12 @@ export function MatchCard({
           : "border-zinc-800/80 bg-zinc-900/40"
       )}
     >
-      <div className="flex items-center justify-between mb-2.5 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500">
-        <div className="flex items-center gap-2">
-          <span>J{matchday}</span>
-          <span className="text-zinc-700">·</span>
-          <span>{day}</span>
-          <span className="text-zinc-700">·</span>
-          <span>{time}</span>
-        </div>
-        <button
-          onClick={handleToggleFav}
-          className="p-0.5 transition-colors"
-          aria-label={favLocal ? "Quitar de favoritos" : "Añadir a favoritos"}
-        >
-          <Star
-            className={cn(
-              "h-3.5 w-3.5 transition-colors",
-              favLocal ? "text-amber-400 fill-amber-400" : "text-zinc-600"
-            )}
-          />
-        </button>
+      <div className="flex items-center gap-2 mb-2.5 text-[10.5px] uppercase tracking-[0.12em] text-zinc-500">
+        <span>J{matchday}</span>
+        <span className="text-zinc-700">·</span>
+        <span>{day}</span>
+        <span className="text-zinc-700">·</span>
+        <span>{time}</span>
       </div>
 
       <div className="flex items-center gap-2.5">

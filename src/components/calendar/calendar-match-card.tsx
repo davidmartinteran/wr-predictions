@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { ChevronDown, Clock, Star } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
 import { isLiveMatch, isSpainMatch } from "@/lib/calendar/utils";
 import type { CalendarMatch, CalendarPrediction } from "@/lib/calendar/types";
 import type { MatchScore } from "@/lib/scoring/engine";
-import { toggleFavorite } from "@/lib/favorites/actions";
 
 export type OtherPredictionEntry = {
   userId: string;
@@ -22,8 +21,6 @@ type Props = {
   prediction: CalendarPrediction | null;
   scoring: MatchScore | null;
   others: OtherPredictionEntry[];
-  isFavorited?: boolean;
-  onToggleFavorite?: (matchId: string, newValue: boolean) => void;
 };
 
 function formatTime(kickoff: string): string {
@@ -151,24 +148,13 @@ function OtherPredictionRow({ entry }: { entry: OtherPredictionEntry }) {
   );
 }
 
-export function CalendarMatchCard({ match, prediction, scoring, others, isFavorited, onToggleFavorite }: Props) {
+export function CalendarMatchCard({ match, prediction, scoring, others }: Props) {
   const [othersOpen, setOthersOpen] = useState(false);
-  const [favLocal, setFavLocal] = useState(isFavorited ?? false);
-  const [, startTransition] = useTransition();
   const live = isLiveMatch(match);
   const spain = isSpainMatch(match);
   const finished = match.finished;
   const upcoming = !finished && !live;
   const time = formatTime(match.kickoff);
-
-  function handleToggleFav() {
-    const next = !favLocal;
-    setFavLocal(next);
-    onToggleFavorite?.(match.id, next);
-    startTransition(async () => {
-      await toggleFavorite({ match_id: match.id });
-    });
-  }
 
   return (
     <div
@@ -203,21 +189,7 @@ export function CalendarMatchCard({ match, prediction, scoring, others, isFavori
             <span className="text-zinc-500">{time}</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <StageBadge match={match} />
-          <button
-            onClick={handleToggleFav}
-            className="p-0.5 transition-colors"
-            aria-label={favLocal ? "Quitar de favoritos" : "Añadir a favoritos"}
-          >
-            <Star
-              className={cn(
-                "h-4 w-4 transition-colors",
-                favLocal ? "text-amber-400 fill-amber-400" : "text-zinc-600"
-              )}
-            />
-          </button>
-        </div>
+        <StageBadge match={match} />
       </div>
 
       {/* Teams */}

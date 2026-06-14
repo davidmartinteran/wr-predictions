@@ -42,6 +42,7 @@ export default async function CalendarPage({
           tournamentId={pool.tournament_id}
           currentUserId={user.id}
           isPastDeadline={isPastDeadline}
+          isAdmin={participation.is_admin}
         />
       </Suspense>
     </div>

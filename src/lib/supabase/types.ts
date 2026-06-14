@@ -69,32 +69,6 @@ export type Database = {
           },
         ]
       }
-      match_favorites: {
-        Row: {
-          user_id: string
-          match_id: string
-          created_at: string
-        }
-        Insert: {
-          user_id: string
-          match_id: string
-          created_at?: string
-        }
-        Update: {
-          user_id?: string
-          match_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "match_favorites_match_id_fkey"
-            columns: ["match_id"]
-            isOneToOne: false
-            referencedRelation: "matches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       matches: {
         Row: {
           api_fixture_id: number | null
@@ -112,6 +86,7 @@ export type Database = {
           stage: string
           status: string
           tournament_id: string
+          winner_team: string | null
         }
         Insert: {
           api_fixture_id?: number | null
@@ -129,6 +104,7 @@ export type Database = {
           stage: string
           status?: string
           tournament_id: string
+          winner_team?: string | null
         }
         Update: {
           api_fixture_id?: number | null
@@ -146,6 +122,7 @@ export type Database = {
           stage?: string
           status?: string
           tournament_id?: string
+          winner_team?: string | null
         }
         Relationships: [
           {
@@ -169,29 +146,36 @@ export type Database = {
             referencedRelation: "tournaments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "matches_winner_team_fkey"
+            columns: ["winner_team"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notification_log: {
         Row: {
           id: string
-          match_id: string
           kind: string
-          sent_at: string
+          match_id: string
           recipients: number
+          sent_at: string
         }
         Insert: {
           id?: string
-          match_id: string
           kind: string
-          sent_at?: string
+          match_id: string
           recipients?: number
+          sent_at?: string
         }
         Update: {
           id?: string
-          match_id?: string
           kind?: string
-          sent_at?: string
+          match_id?: string
           recipients?: number
+          sent_at?: string
         }
         Relationships: [
           {
@@ -275,6 +259,7 @@ export type Database = {
           id: string
           invite_code: string
           name: string
+          notifications_enabled: boolean
           scoring_frozen_at: string | null
           scoring_rules: Json
           status: string
@@ -288,6 +273,7 @@ export type Database = {
           id?: string
           invite_code?: string
           name: string
+          notifications_enabled?: boolean
           scoring_frozen_at?: string | null
           scoring_rules?: Json
           status?: string
@@ -301,6 +287,7 @@ export type Database = {
           id?: string
           invite_code?: string
           name?: string
+          notifications_enabled?: boolean
           scoring_frozen_at?: string | null
           scoring_rules?: Json
           status?: string
@@ -313,6 +300,45 @@ export type Database = {
             columns: ["tournament_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      predicted_team_rounds: {
+        Row: {
+          created_at: string | null
+          pool_id: string
+          round: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          pool_id: string
+          round: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          pool_id?: string
+          round?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "predicted_team_rounds_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "predicted_team_rounds_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -573,34 +599,34 @@ export type Database = {
       }
       push_subscriptions: {
         Row: {
-          id: string
-          user_id: string
-          endpoint: string
-          keys_p256dh: string
-          keys_auth: string
-          user_agent: string | null
           created_at: string
+          endpoint: string
+          id: string
+          keys_auth: string
+          keys_p256dh: string
           updated_at: string
+          user_agent: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          endpoint: string
-          keys_p256dh: string
-          keys_auth: string
-          user_agent?: string | null
           created_at?: string
+          endpoint: string
+          id?: string
+          keys_auth: string
+          keys_p256dh: string
           updated_at?: string
+          user_agent?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          endpoint?: string
-          keys_p256dh?: string
-          keys_auth?: string
-          user_agent?: string | null
           created_at?: string
+          endpoint?: string
+          id?: string
+          keys_auth?: string
+          keys_p256dh?: string
           updated_at?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }

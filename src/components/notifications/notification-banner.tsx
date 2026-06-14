@@ -11,24 +11,24 @@ import {
 } from "@/lib/push/subscribe";
 import { saveSubscription } from "@/lib/push/actions";
 
-const DISMISSED_KEY = "notification-banner-dismissed";
-
-export function NotificationBanner() {
+export function NotificationBanner({ poolId }: { poolId: string }) {
   const [visible, setVisible] = useState(false);
   const [, startTransition] = useTransition();
+
+  const dismissedKey = `notification-banner-dismissed:${poolId}`;
 
   useEffect(() => {
     if (!isPushSupported()) return;
     if (isPushGranted()) return;
     if (isPushDenied()) return;
-    if (localStorage.getItem(DISMISSED_KEY)) return;
+    if (localStorage.getItem(dismissedKey)) return;
     setVisible(true);
-  }, []);
+  }, [dismissedKey]);
 
   if (!visible) return null;
 
   function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, "1");
+    localStorage.setItem(dismissedKey, "1");
     setVisible(false);
   }
 
@@ -57,7 +57,7 @@ export function NotificationBanner() {
           Activa las notificaciones
         </p>
         <p className="text-[11px] text-zinc-500">
-          Te avisamos 15 min antes de tus partidos favoritos
+          Te avisamos antes y después de cada partido del Mundial
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
