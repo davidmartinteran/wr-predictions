@@ -8,6 +8,7 @@ type ScoreRow = {
   category: string;
   points: number;
   exact_hits: number;
+  sign_hits: number;
 };
 
 export type PlayerEntry = {
@@ -28,6 +29,7 @@ export type PlayerEntry = {
     TOTAL: number;
   };
   exactHits: number;
+  signHits: number;
 };
 
 const MAX_SCORES = {
@@ -65,7 +67,7 @@ export default async function LeaderboardPage({
         .eq("pool_id", poolId),
       supabase
         .from("scores")
-        .select("user_id, category, points, exact_hits")
+        .select("user_id, category, points, exact_hits, sign_hits")
         .eq("pool_id", poolId),
     ],
   );
@@ -90,6 +92,7 @@ export default async function LeaderboardPage({
     };
 
     let exactHits = 0;
+    let signHits = 0;
 
     for (const row of userScores) {
       const cat = row.category as keyof typeof scores;
@@ -98,6 +101,7 @@ export default async function LeaderboardPage({
       }
       if (cat === "RESULTS") {
         exactHits = row.exact_hits;
+        signHits = row.sign_hits ?? 0;
       }
     }
 
@@ -111,6 +115,7 @@ export default async function LeaderboardPage({
       scores,
       maxScores: MAX_SCORES,
       exactHits,
+      signHits,
     };
   });
 

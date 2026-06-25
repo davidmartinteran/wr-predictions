@@ -20,10 +20,14 @@ import {
   Snowflake,
   Settings,
   Trash2,
+  CalendarDays,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ViewMode } from "./page";
 import { MatchCard } from "@/components/predictions/match-card";
 import { StandingsStrip } from "@/components/predictions/standings-strip";
+import { GroupLiveTable } from "@/components/predictions/group-live-table";
 import {
   savePrediction,
   saveExtra,
@@ -55,8 +59,10 @@ import {
   rankThirdPlacedTeams,
   resolveThirds,
   buildBracketState,
+  buildBracketStateFromR32,
   cascadeInvalidation,
   type BracketState,
+  type RealR32Match,
 } from "@/lib/bracket/engine";
 import { TOTAL_BRACKET_PICKS, type Stage } from "@/lib/bracket/mapping";
 import { detectGroupTies } from "@/lib/bracket/standings";
@@ -80,6 +86,10 @@ type Match = {
   group_letter: string | null;
   match_number: number;
   kickoff: string;
+  actual_home_score?: number | null;
+  actual_away_score?: number | null;
+  actual_status?: string | null;
+  actual_finished?: boolean | null;
   home_team_data: Team;
   away_team_data: Team;
 };
@@ -114,6 +124,11 @@ type SavedTiebreak = {
 type Props = {
   poolId: string;
   matches: Match[];
+  isLatePool?: boolean;
+  started?: boolean;
+  startsAt?: string | null;
+  realR32?: RealR32Match[];
+  tournamentStarted?: boolean;
   predictions: Prediction[];
   extraPredictions: ExtraPrediction[];
   allTeams: Team[];
@@ -156,11 +171,16 @@ function getMatchday(matchNumber: number): number {
 export function PredictionsClient({
   poolId,
   matches,
+  isLatePool = false,
+  started = true,
+  startsAt = null,
+  realR32 = [],
+  tournamentStarted = false,
   predictions,
   extraPredictions,
   allTeams,
   knockoutPredictions,
-  disabled,
+  disabled: rawDisabled,
   viewMode,
   ownPredictions,
   targetDisplayName,
@@ -180,8 +200,18 @@ export function PredictionsClient({
       string,
       { home: number | null; away: number | null }
     > = {};
-    for (const p of predictions) {
-      initial[p.match_id] = { home: p.home_score, away: p.away_score };
+    // Porra tardía: los grupos salen pre-marcados con el resultado REAL
+    // (read-only, no se guardan). En una porra normal, con el pronóstico propio.
+    if (isLatePool) {
+      for (const m of matches) {
+        if (m.actual_home_score != null && m.actual_away_score != null) {
+          initial[m.id] = { home: m.actual_home_score, away: m.actual_away_score };
+        }
+      }
+    } else {
+      for (const p of predictions) {
+        initial[p.match_id] = { home: p.home_score, away: p.away_score };
+      }
     }
     return initial;
   });
@@ -218,9 +248,6 @@ export function PredictionsClient({
     return initial;
   });
   const [selectedThirds, setSelectedThirds] = useState<string[]>([]);
-  const [tiebreakModal, setTiebreakModal] = useState<{ group: string } | null>(
-    null,
-  );
   const [, startTransition] = useTransition();
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>(
     {},
@@ -282,6 +309,56 @@ export function PredictionsClient({
     }
     return { ...base, rows };
   }, [activeGroup, matches, scores, groupTiebreaks]);
+
+  // Clasificación REAL del grupo activo, a partir de los marcadores reales de
+  // los partidos (no del pronóstico). Alimenta la tabla live de arriba.
+  const liveResults = useMemo(() => {
+    const map: Record<string, { home: number | null; away: number | null }> = {};
+    for (const m of matches) {
+      if (m.actual_home_score != null && m.actual_away_score != null) {
+        map[m.id] = { home: m.actual_home_score, away: m.actual_away_score };
+      }
+    }
+    return map;
+  }, [matches]);
+
+  const liveStandings = useMemo(
+    () => computeStandings(activeGroup, matches, liveResults),
+    [activeGroup, matches, liveResults],
+  );
+
+  // ¿Hay algún partido del grupo activo en directo?
+  const groupIsLive = useMemo(
+    () =>
+      matches.some(
+        (m) => m.group_letter === activeGroup && m.actual_status === "LIVE",
+      ),
+    [matches, activeGroup],
+  );
+
+  // Partidos del grupo ya TERMINADOS (no solo con marcador): determina si la
+  // clasificación real es definitiva. Un partido en vivo tiene marcador parcial
+  // pero no cuenta como jugado.
+  const groupFinishedCount = useMemo(
+    () =>
+      matches.filter(
+        (m) => m.group_letter === activeGroup && m.actual_finished === true,
+      ).length,
+    [matches, activeGroup],
+  );
+
+  // Refresco en vivo: una vez arrancado el torneo, repesca los marcadores
+  // reales que escribe poll-results. Solo cuando la pestaña está visible.
+  // tournamentStarted lo calcula el loader (servidor) para no leer Date.now()
+  // en render.
+  const router = useRouter();
+  useEffect(() => {
+    if (!tournamentStarted) return;
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [tournamentStarted, router]);
 
   const handleScoreChange = useCallback(
     (matchId: string, home: number | null, away: number | null) => {
@@ -391,6 +468,13 @@ export function PredictionsClient({
 
   const allGroupsComplete = completedCount === totalMatches;
 
+  // Porra tardía: bloqueo total antes del start; y el bracket se siembra de los
+  // cruces reales de R32 (no de la clasificación predicha).
+  const disabled = rawDisabled || (isLatePool && !started);
+  const r32Ready =
+    realR32.length === 16 &&
+    realR32.every((m) => m.homeTeam !== null && m.awayTeam !== null);
+
   // Bracket computation — recomputes on any score change so group changes propagate
   const rawStandings = useMemo(
     () => (allGroupsComplete ? deriveAllGroupStandings(matches, scores) : null),
@@ -425,6 +509,11 @@ export function PredictionsClient({
   }, [thirdsRanking, selectedThirds]);
 
   const bracketState = useMemo<BracketState | null>(() => {
+    // Porra tardía: sembrado directo desde los cruces reales de R32.
+    if (isLatePool) {
+      if (!r32Ready) return null;
+      return buildBracketStateFromR32(realR32, knockoutPicks);
+    }
     if (!allStandings || !thirdsRanking || !thirdsResolved) return null;
     const resolvedThirdTeams =
       thirdsRanking.tied.length === 0
@@ -439,6 +528,9 @@ export function PredictionsClient({
       knockoutPicks,
     );
   }, [
+    isLatePool,
+    r32Ready,
+    realR32,
     allStandings,
     thirdsRanking,
     thirdsResolved,
@@ -544,7 +636,6 @@ export function PredictionsClient({
   const handleTiebreakResolve = useCallback(
     (group: string, ordered: string[]) => {
       setGroupTiebreaks((prev) => ({ ...prev, [group]: ordered }));
-      setTiebreakModal(null);
       startTransition(async () => {
         await saveGroupTiebreak({
           pool_id: poolId,
@@ -582,10 +673,12 @@ export function PredictionsClient({
     }
   }, [scores, groupComplete, matches, poolId]);
 
-  // Auto-trigger group tiebreak modal when a complete group has a tie without resolution (only in own-open)
+  // Grupo con empate completo sin resolver: fuerza el modal de desempate (solo
+  // en own-open y porras normales — en porra tardía el bracket viene de lo real,
+  // no de la clasificación, así que no aplica). El modal se deriva de este valor
+  // (no hay estado de "modal abierto"): se cierra solo al resolverlo.
   const pendingTiebreakGroup = useMemo(() => {
-    if (viewMode !== "own-open") return null;
-    if (tiebreakModal) return null;
+    if (viewMode !== "own-open" || isLatePool) return null;
     for (const g of GROUPS) {
       if (groupTiebreaks[g]) continue;
       if (!groupComplete(g)) continue;
@@ -594,15 +687,12 @@ export function PredictionsClient({
       if (tie) return g;
     }
     return null;
-  }, [viewMode, scores, groupComplete, matches, groupTiebreaks, tiebreakModal]);
+  }, [viewMode, isLatePool, scores, groupComplete, matches, groupTiebreaks]);
 
+  // Al aparecer un empate pendiente, quita el foco del input (cierra el teclado
+  // numérico en móvil). Sin setState → no dispara renders en cascada.
   useEffect(() => {
-    if (pendingTiebreakGroup) {
-      (document.activeElement as HTMLElement)?.blur();
-      setActiveGroup(pendingTiebreakGroup);
-      setActiveSection("groups");
-      setTiebreakModal({ group: pendingTiebreakGroup });
-    }
+    if (pendingTiebreakGroup) (document.activeElement as HTMLElement)?.blur();
   }, [pendingTiebreakGroup]);
 
   const sectionCounts = useMemo(
@@ -701,6 +791,10 @@ export function PredictionsClient({
 
   const sharedProps = {
     deadline,
+    isLatePool,
+    started,
+    startsAt,
+    r32Ready,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -716,6 +810,10 @@ export function PredictionsClient({
     groupComplete,
     isMatchComplete,
     standings,
+    liveStandings,
+    groupIsLive,
+    groupFinishedCount,
+    tournamentStarted,
     disabled,
     handleScoreChange,
     goNextGroup,
@@ -732,8 +830,7 @@ export function PredictionsClient({
     handleKnockoutPick,
     handleThirdToggle,
     groupTiebreaks,
-    tiebreakModal,
-    setTiebreakModal,
+    pendingTiebreakGroup,
     handleTiebreakResolve,
     viewMode,
     ownScores,
@@ -787,6 +884,10 @@ type SectionCounts = {
 
 type LayoutProps = {
   deadline?: string;
+  isLatePool: boolean;
+  started: boolean;
+  startsAt: string | null;
+  r32Ready: boolean;
   activeSection: Section;
   setActiveSection: (s: Section) => void;
   sectionCounts: SectionCounts;
@@ -802,6 +903,10 @@ type LayoutProps = {
   groupComplete: (g: string) => boolean;
   isMatchComplete: (m: Match) => boolean;
   standings: ReturnType<typeof computeStandings>;
+  liveStandings: ReturnType<typeof computeStandings>;
+  groupIsLive: boolean;
+  groupFinishedCount: number;
+  tournamentStarted: boolean;
   disabled: boolean;
   handleScoreChange: (
     matchId: string,
@@ -822,10 +927,7 @@ type LayoutProps = {
   handleKnockoutPick: (stage: Stage, slot: number, teamId: string) => void;
   handleThirdToggle: (teamId: string) => void;
   groupTiebreaks: Record<string, string[]>;
-  tiebreakModal: { group: string } | null;
-  setTiebreakModal: React.Dispatch<
-    React.SetStateAction<{ group: string } | null>
-  >;
+  pendingTiebreakGroup: string | null;
   handleTiebreakResolve: (group: string, ordered: string[]) => void;
   viewMode: ViewMode;
   ownScores: Record<
@@ -844,8 +946,51 @@ type LayoutProps = {
   handleClearBracket: () => void;
 };
 
+function BracketLockedPlaceholder({
+  reason,
+  startsAt,
+}: {
+  reason: "before-start" | "not-ready";
+  startsAt: string | null;
+}) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8 min-h-0">
+      <div className="text-center max-w-xs">
+        <div className="mx-auto mb-3 w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center">
+          <Lock className="w-4 h-4 text-zinc-500" />
+        </div>
+        {reason === "before-start" ? (
+          <>
+            <div className="text-[14px] font-semibold text-zinc-100">
+              Bracket bloqueado
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-zinc-500 leading-relaxed">
+              Podrás rellenar el bracket a partir del{" "}
+              {startsAt ? formatDeadlineBadge(startsAt) : "inicio de la porra"}.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="text-[14px] font-semibold text-zinc-100">
+              Preparando el bracket
+            </div>
+            <p className="mt-1.5 text-[12.5px] text-zinc-500 leading-relaxed">
+              Los cruces se activarán en cuanto terminen los grupos. Vuelve en
+              unos minutos.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MobileLayout(props: LayoutProps) {
   const {
+    isLatePool,
+    started,
+    startsAt,
+    r32Ready,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -861,6 +1006,10 @@ function MobileLayout(props: LayoutProps) {
     groupComplete,
     isMatchComplete,
     standings,
+    liveStandings,
+    groupIsLive,
+    groupFinishedCount,
+    tournamentStarted,
     disabled,
     handleScoreChange,
     goNextGroup,
@@ -876,8 +1025,7 @@ function MobileLayout(props: LayoutProps) {
     selectedThirds,
     handleKnockoutPick,
     handleThirdToggle,
-    tiebreakModal,
-    setTiebreakModal,
+    pendingTiebreakGroup,
     handleTiebreakResolve,
     viewMode,
     ownScores,
@@ -1025,6 +1173,14 @@ function MobileLayout(props: LayoutProps) {
 
           {/* Match list */}
           <div className="flex-1 overflow-y-auto scrollbar-thin px-4 pt-3 pb-4 min-h-0">
+            {tournamentStarted && (
+              <GroupLiveTable
+                groupId={activeGroup}
+                standings={liveStandings}
+                isLive={groupIsLive}
+                finishedCount={groupFinishedCount}
+              />
+            )}
             <div className="flex items-center justify-between mb-2.5 px-1">
               <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500 font-medium">
                 {groupMatches.length} partidos · Grupo {activeGroup}
@@ -1033,7 +1189,7 @@ function MobileLayout(props: LayoutProps) {
                 <span className="text-[11px] text-zinc-500 tabular-nums">
                   {groupFilled}/{groupMatches.length}
                 </span>
-                {viewMode === "own-open" && groupFilled > 0 && (
+                {viewMode === "own-open" && !isLatePool && groupFilled > 0 && (
                   <button
                     onClick={() => handleClearGroup(activeGroup)}
                     className="text-zinc-600 hover:text-zinc-400 transition-colors"
@@ -1055,9 +1211,14 @@ function MobileLayout(props: LayoutProps) {
                     kickoff={match.kickoff}
                     homeScore={scores[match.id]?.home ?? null}
                     awayScore={scores[match.id]?.away ?? null}
-                    disabled={disabled}
+                    disabled={disabled || isLatePool}
                     onScoreChange={handleScoreChange}
                     complete={isMatchComplete(match)}
+                    calendarHref={
+                      tournamentStarted
+                        ? `/pools/${poolId}/calendar?match=${match.id}`
+                        : undefined
+                    }
                   />
                   {viewMode === "viewing-other" && ownScores && (
                     <OwnPredictionLine
@@ -1104,7 +1265,20 @@ function MobileLayout(props: LayoutProps) {
       )}
 
       {activeSection === "bracket" &&
-        (!allGroupsComplete ? (
+        (isLatePool ? (
+          !started ? (
+            <BracketLockedPlaceholder reason="before-start" startsAt={startsAt} />
+          ) : !r32Ready ? (
+            <BracketLockedPlaceholder reason="not-ready" startsAt={startsAt} />
+          ) : bracketState ? (
+            <BracketMobileView
+              bracketState={bracketState}
+              disabled={disabled}
+              onPickWinner={handleKnockoutPick}
+              onClear={handleClearBracket}
+            />
+          ) : null
+        ) : !allGroupsComplete ? (
           <SectionPlaceholder
             section="bracket"
             groupsComplete={false}
@@ -1154,21 +1328,20 @@ function MobileLayout(props: LayoutProps) {
         </div>
       )}
 
-      {/* Group tiebreak modal */}
-      {tiebreakModal &&
+      {/* Group tiebreak modal (forzado: se cierra al resolver) */}
+      {pendingTiebreakGroup &&
         (() => {
-          const s = computeStandings(tiebreakModal.group, matches, scores);
+          const group = pendingTiebreakGroup;
+          const s = computeStandings(group, matches, scores);
           const tie = detectGroupTies(s);
           if (!tie) return null;
           return (
             <GroupTiebreakModal
-              groupLetter={tiebreakModal.group}
+              groupLetter={group}
               tiedTeams={tie.teams}
               tiedPositions={tie.positions}
-              onResolve={(ordered) =>
-                handleTiebreakResolve(tiebreakModal.group, ordered)
-              }
-              onClose={() => setTiebreakModal(null)}
+              onResolve={(ordered) => handleTiebreakResolve(group, ordered)}
+              onClose={() => {}}
             />
           );
         })()}
@@ -1313,6 +1486,10 @@ function DesktopLayout(
 ) {
   const {
     deadline,
+    isLatePool,
+    started,
+    startsAt,
+    r32Ready,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -1329,6 +1506,10 @@ function DesktopLayout(
     groupFilledCount,
     isMatchComplete,
     standings,
+    liveStandings,
+    groupIsLive,
+    groupFinishedCount,
+    tournamentStarted,
     disabled,
     handleScoreChange,
     goNextGroup,
@@ -1344,8 +1525,7 @@ function DesktopLayout(
     selectedThirds,
     handleKnockoutPick,
     handleThirdToggle,
-    tiebreakModal,
-    setTiebreakModal,
+    pendingTiebreakGroup,
     handleTiebreakResolve,
     viewMode,
     ownScores,
@@ -1652,7 +1832,7 @@ function DesktopLayout(
                     6 partidos · {groupFilled}/{groupMatches.length} completos
                   </div>
                 </div>
-                {viewMode === "own-open" && (
+                {viewMode === "own-open" && !isLatePool && (
                   <div className="flex items-center gap-2">
                     {groupFilled > 0 && (
                       <button
@@ -1747,8 +1927,13 @@ function DesktopLayout(
                               complete={complete}
                               day={day}
                               time={time}
-                              disabled={disabled}
+                              disabled={disabled || isLatePool}
                               onScoreChange={handleScoreChange}
+                              calendarHref={
+                                tournamentStarted
+                                  ? `/pools/${poolId}/calendar?match=${match.id}`
+                                  : undefined
+                              }
                             />
                             {viewMode === "viewing-other" && ownScores && (
                               <OwnPredictionLine
@@ -1784,7 +1969,20 @@ function DesktopLayout(
           )}
 
           {activeSection === "bracket" &&
-            (!allGroupsComplete ? (
+            (isLatePool ? (
+              !started ? (
+                <BracketLockedPlaceholder reason="before-start" startsAt={startsAt} />
+              ) : !r32Ready ? (
+                <BracketLockedPlaceholder reason="not-ready" startsAt={startsAt} />
+              ) : bracketState ? (
+                <BracketDesktopView
+                  bracketState={bracketState}
+                  disabled={disabled}
+                  onPickWinner={handleKnockoutPick}
+                  onClear={handleClearBracket}
+                />
+              ) : null
+            ) : !allGroupsComplete ? (
               <SectionPlaceholder
                 section="bracket"
                 groupsComplete={false}
@@ -1836,6 +2034,14 @@ function DesktopLayout(
         {/* RIGHT — standings & progress (only for groups) */}
         {activeSection === "groups" && (
           <aside className="w-60 xl:w-70 border-l border-zinc-800/80 bg-zinc-950 shrink-0 p-4 xl:p-5 overflow-y-auto scrollbar-thin">
+            {tournamentStarted && (
+              <GroupLiveTable
+                groupId={activeGroup}
+                standings={liveStandings}
+                isLive={groupIsLive}
+                finishedCount={groupFinishedCount}
+              />
+            )}
             <DesktopStandingsCard
               groupId={activeGroup}
               standings={standings}
@@ -1927,21 +2133,20 @@ function DesktopLayout(
           </aside>
         )}
 
-        {/* Group tiebreak modal */}
-        {tiebreakModal &&
+        {/* Group tiebreak modal (forzado: se cierra al resolver) */}
+        {pendingTiebreakGroup &&
           (() => {
-            const s = computeStandings(tiebreakModal.group, matches, scores);
+            const group = pendingTiebreakGroup;
+            const s = computeStandings(group, matches, scores);
             const tie = detectGroupTies(s);
             if (!tie) return null;
             return (
               <GroupTiebreakModal
-                groupLetter={tiebreakModal.group}
+                groupLetter={group}
                 tiedTeams={tie.teams}
                 tiedPositions={tie.positions}
-                onResolve={(ordered) =>
-                  handleTiebreakResolve(tiebreakModal.group, ordered)
-                }
-                onClose={() => setTiebreakModal(null)}
+                onResolve={(ordered) => handleTiebreakResolve(group, ordered)}
+                onClose={() => {}}
               />
             );
           })()}
@@ -2031,6 +2236,7 @@ function DesktopMatchCard({
   time,
   disabled,
   onScoreChange,
+  calendarHref,
 }: {
   match: Match;
   homeScore: number | null;
@@ -2044,6 +2250,7 @@ function DesktopMatchCard({
     home: number | null,
     away: number | null,
   ) => void;
+  calendarHref?: string;
 }) {
   const handleHome = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2120,6 +2327,15 @@ function DesktopMatchCard({
           />
         </div>
       </div>
+      {calendarHref && (
+        <Link
+          href={calendarHref}
+          className="mt-3 flex items-center justify-center gap-1.5 text-[11.5px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <CalendarDays className="w-3.5 h-3.5" />
+          Ver en calendario
+        </Link>
+      )}
     </div>
   );
 }

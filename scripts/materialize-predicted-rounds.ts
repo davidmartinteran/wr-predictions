@@ -19,7 +19,9 @@ import {
   rankThirdPlacedTeams,
   resolveThirds,
   buildBracketState,
+  buildBracketStateFromR32,
   type ThirdPlaceTeam,
+  type RealR32Match,
 } from "../src/lib/bracket/engine";
 import { derivePredictedRounds } from "../src/lib/bracket/predicted-rounds";
 import type { TeamInfo } from "../src/lib/bracket/standings";
@@ -41,15 +43,25 @@ async function main() {
   const { url, serviceKey } = loadEnv();
   const supabase = createClient(url, serviceKey);
 
-  const [{ data: teams }, { data: groupMatches }, { data: participations }] =
-    await Promise.all([
-      supabase.from("teams").select("id, name, code, flag_emoji"),
-      supabase
-        .from("matches")
-        .select("id, group_letter, home_team, away_team")
-        .eq("stage", "GROUP"),
-      supabase.from("participations").select("user_id, pool_id"),
-    ]);
+  const [
+    { data: teams },
+    { data: groupMatches },
+    { data: participations },
+    { data: pools },
+    { data: r32Matches },
+  ] = await Promise.all([
+    supabase.from("teams").select("id, name, code, flag_emoji"),
+    supabase
+      .from("matches")
+      .select("id, group_letter, home_team, away_team")
+      .eq("stage", "GROUP"),
+    supabase.from("participations").select("user_id, pool_id"),
+    supabase.from("pools").select("id, starts_at"),
+    supabase
+      .from("matches")
+      .select("match_number, home_team, away_team")
+      .eq("stage", "R32"),
+  ]);
   if (!teams?.length || !groupMatches?.length || !participations?.length) {
     throw new Error("Datos base incompletos (teams/matches/participations)");
   }
@@ -61,6 +73,17 @@ async function main() {
     group_letter: m.group_letter,
     home_team_data: teamById.get(m.home_team!)!,
     away_team_data: teamById.get(m.away_team!)!,
+  }));
+
+  // Porras tardías: bracket sembrado de los cruces REALES de R32, no de la
+  // clasificación predicha (que no existe). Mismo motor que la UI.
+  const lateStartByPool = new Map<string, boolean>(
+    (pools ?? []).map((p) => [p.id, p.starts_at != null]),
+  );
+  const realR32: RealR32Match[] = (r32Matches ?? []).map((m) => ({
+    matchNumber: m.match_number,
+    homeTeam: m.home_team ? (teamById.get(m.home_team) ?? null) : null,
+    awayTeam: m.away_team ? (teamById.get(m.away_team) ?? null) : null,
   }));
 
   for (const { user_id, pool_id } of participations) {
@@ -100,28 +123,34 @@ async function main() {
       picksMap[`${k.stage}:${k.slot}`] = k.team_id;
     }
 
-    const standings = applyGroupTiebreaks(
-      deriveAllGroupStandings(matchLikes, scoreMap),
-      tiebreakMap
-    );
-    const ranking = rankThirdPlacedTeams(standings);
+    let bracket;
+    if (lateStartByPool.get(pool_id) === true) {
+      // Porra tardía: bracket desde los cruces reales de R32 + sus picks.
+      bracket = buildBracketStateFromR32(realR32, picksMap);
+    } else {
+      const standings = applyGroupTiebreaks(
+        deriveAllGroupStandings(matchLikes, scoreMap),
+        tiebreakMap
+      );
+      const ranking = rankThirdPlacedTeams(standings);
 
-    let pickedFromTied: ThirdPlaceTeam[] = [];
-    if (ranking.tied.length > 0 && ranking.neededFromTied > 0) {
-      const inPicks = ranking.tied.filter((t) => pickedTeamIds.has(t.id));
-      const rest = ranking.tied.filter((t) => !pickedTeamIds.has(t.id));
-      pickedFromTied = [...inPicks, ...rest].slice(0, ranking.neededFromTied);
-      console.warn(
-        `⚠ user ${user_id}: terceros empatados sin selección persistida; ` +
-          `inferidos: ${pickedFromTied.map((t) => t.code).join(", ")}`
+      let pickedFromTied: ThirdPlaceTeam[] = [];
+      if (ranking.tied.length > 0 && ranking.neededFromTied > 0) {
+        const inPicks = ranking.tied.filter((t) => pickedTeamIds.has(t.id));
+        const rest = ranking.tied.filter((t) => !pickedTeamIds.has(t.id));
+        pickedFromTied = [...inPicks, ...rest].slice(0, ranking.neededFromTied);
+        console.warn(
+          `⚠ user ${user_id}: terceros empatados sin selección persistida; ` +
+            `inferidos: ${pickedFromTied.map((t) => t.code).join(", ")}`
+        );
+      }
+
+      bracket = buildBracketState(
+        standings,
+        resolveThirds(ranking.autoQualified, pickedFromTied),
+        picksMap
       );
     }
-
-    const bracket = buildBracketState(
-      standings,
-      resolveThirds(ranking.autoQualified, pickedFromTied),
-      picksMap
-    );
     const rounds = derivePredictedRounds(bracket, allTeamIds);
 
     const rows = Object.entries(rounds).map(([team_id, round]) => ({

@@ -8,6 +8,7 @@ type Props = {
   currentUserId: string;
   isPastDeadline: boolean;
   isAdmin: boolean;
+  focusMatchId?: string;
 };
 
 export async function CalendarLoader({
@@ -16,6 +17,7 @@ export async function CalendarLoader({
   currentUserId,
   isPastDeadline,
   isAdmin,
+  focusMatchId,
 }: Props) {
   const supabase = await createClient();
 
@@ -128,6 +130,7 @@ export async function CalendarLoader({
       scoringRules={scoringRules}
       isAdmin={isAdmin}
       notificationsEnabled={notificationsEnabled}
+      focusMatchId={focusMatchId}
     />
   );
 }

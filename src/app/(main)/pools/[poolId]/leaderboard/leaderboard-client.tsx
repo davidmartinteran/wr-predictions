@@ -8,7 +8,8 @@ import type { PlayerEntry } from "./page";
 
 type Category = "TOTAL" | "RESULTS" | "CLASSIFICATIONS" | "EXTRAS";
 
-type ScoreCat = { key: Category; label: string; short: string; abbr: string; color: string; max: number; detail: string[] };
+type BreakdownCategory = Exclude<Category, "TOTAL">;
+type ScoreCat = { key: BreakdownCategory; label: string; short: string; abbr: string; color: string; max: number; detail: string[] };
 
 const SCORE_CATS: ScoreCat[] = [
   { key: "RESULTS", label: "Resultados", short: "Result.", abbr: "RE", color: "#1B9E5B", max: 225, detail: [
@@ -318,17 +319,21 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pl
 
         {/* Right — stats */}
         <div className="w-[200px] shrink-0">
-          <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-3">Stats</div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div>
-              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Exactos</div>
-              <PointsMono value={player.exactHits} size={22} />
-            </div>
-            <div>
-              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Hoy</div>
-              <span className="text-[20px] font-bold tabular-nums text-zinc-500" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>0</span>
-            </div>
-          </div>
+          {(player.exactHits > 0 || player.signHits > 0) && (
+            <>
+              <div className="text-[10.5px] uppercase tracking-[0.14em] text-zinc-500 font-medium mb-3">Stats</div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Exactos</div>
+                  <PointsMono value={player.exactHits} size={22} />
+                </div>
+                <div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Signos</div>
+                  <PointsMono value={player.signHits} size={22} />
+                </div>
+              </div>
+            </>
+          )}
           {canView ? (
             <a
               href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
@@ -397,7 +402,9 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
                       {p.displayName}
                       {p.isCurrentUser && <span className="text-[10px] ml-1.5 font-normal" style={{ color: "var(--color-primary)" }}>· tú</span>}
                     </div>
-                    <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos</div>
+                    {(p.exactHits > 0 || p.signHits > 0) && (
+                      <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos · {p.signHits} signos</div>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <PointsMono value={value} size={16} />
@@ -521,7 +528,9 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                         {p.displayName}
                         {p.isCurrentUser && <span className="text-[10.5px] ml-1.5 font-normal" style={{ color: "var(--color-primary)" }}>· tú</span>}
                       </div>
-                      <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos</div>
+                      {(p.exactHits > 0 || p.signHits > 0) && (
+                      <div className="text-[10.5px] text-zinc-500 tabular-nums">{p.exactHits} exactos · {p.signHits} signos</div>
+                    )}
                     </div>
                   </div>
 
@@ -580,7 +589,9 @@ function DesktopPodium({ podium }: { podium: PlayerEntry[] }) {
                 </span>
               </div>
               <div className="text-[15px] font-semibold text-zinc-100 truncate">{player.displayName}</div>
-              <div className="text-[10.5px] text-zinc-500 tabular-nums">{player.exactHits} exactos</div>
+              {(player.exactHits > 0 || player.signHits > 0) && (
+                <div className="text-[10.5px] text-zinc-500 tabular-nums">{player.exactHits} exactos · {player.signHits} signos</div>
+              )}
             </div>
             <div className="text-right shrink-0">
               <PointsMono value={player.scores.TOTAL} size={28} />

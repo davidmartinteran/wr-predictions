@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Prototipos de diseño (JSX de referencia, no forman parte del build).
+    "DOCS/**",
   ]),
 ]);
 

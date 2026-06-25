@@ -9,6 +9,9 @@ const createPoolSchema = z.object({
   name: z.string().trim().min(2, "Mínimo 2 caracteres").max(60),
   tournament_id: z.string().uuid(),
   deadline: z.string().datetime(),
+  // Porras tardías: partidos antes de starts_at salen pre-rellenados reales y
+  // no puntúan. Vacío = porra normal.
+  starts_at: z.string().datetime().optional(),
   display_name: z.string().trim().min(2, "Mínimo 2 caracteres").max(40),
 });
 
@@ -38,6 +41,7 @@ export async function createPool(input: z.infer<typeof createPoolSchema>) {
       name: parsed.data.name,
       tournament_id: parsed.data.tournament_id,
       deadline: parsed.data.deadline,
+      starts_at: parsed.data.starts_at ?? null,
       created_by: user.id,
       status: "OPEN",
     })

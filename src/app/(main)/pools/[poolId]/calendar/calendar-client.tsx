@@ -41,6 +41,7 @@ type Props = {
   scoringRules: ScoringRules | null;
   isAdmin: boolean;
   notificationsEnabled: boolean;
+  focusMatchId?: string;
 };
 
 export function CalendarClient({
@@ -52,6 +53,7 @@ export function CalendarClient({
   scoringRules,
   isAdmin,
   notificationsEnabled,
+  focusMatchId,
 }: Props) {
   const rules = scoringRules ?? DEFAULT_RULES;
   const router = useRouter();
@@ -102,9 +104,33 @@ export function CalendarClient({
 
   const days = useMemo(() => groupMatchesByDay(matches), [matches]);
 
-  const [selectedDate, setSelectedDate] = useState(() =>
-    findTodayOrNearest(days),
+  // Día del partido enlazado desde otra pantalla (?match=…), si existe.
+  const focusDateKey = useMemo(() => {
+    if (!focusMatchId) return null;
+    return (
+      days.find((d) => d.matches.some((m) => m.id === focusMatchId))?.dateKey ??
+      null
+    );
+  }, [days, focusMatchId]);
+
+  const [selectedDate, setSelectedDate] = useState(
+    () => focusDateKey ?? findTodayOrNearest(days),
   );
+
+  // Al llegar con ?match=…, desplaza la tarjeta a la vista y la resalta un
+  // instante para que se localice de un vistazo.
+  useEffect(() => {
+    if (!focusMatchId || !focusDateKey) return;
+    const el = document.getElementById(`match-${focusMatchId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary");
+    const t = setTimeout(
+      () => el.classList.remove("ring-2", "ring-primary"),
+      2400,
+    );
+    return () => clearTimeout(t);
+  }, [focusMatchId, focusDateKey, selectedDate]);
 
   const currentDayIdx = days.findIndex((d) => d.dateKey === selectedDate);
   const currentDay: TournamentDay | undefined = days[currentDayIdx];

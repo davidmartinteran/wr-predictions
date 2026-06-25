@@ -406,6 +406,11 @@ function buildBotePlayer() {
 
 // ── Tests ──────────────────────────────────────────────────────────
 
+// Aplica scorePlayer a la salida de un builder (evita el spread con `any`).
+function scoreOf(b: ReturnType<typeof buildOracle>) {
+  return scorePlayer(b.matchPreds, b.predictedElim, b.extras, b.podium);
+}
+
 describe("Full tournament simulation", () => {
 
   describe("Sanity checks", () => {
@@ -517,8 +522,8 @@ describe("Full tournament simulation", () => {
     });
 
     it("total is between Bote and Oracle", () => {
-      const oracle = scorePlayer(...Object.values(buildOracle()) as [any, any, any]);
-      const bote = scorePlayer(...Object.values(buildBotePlayer()) as [any, any, any]);
+      const oracle = scoreOf(buildOracle());
+      const bote = scoreOf(buildBotePlayer());
       expect(result.total).toBeLessThan(oracle.total);
       expect(result.total).toBeGreaterThan(bote.total);
     });
@@ -558,8 +563,8 @@ describe("Full tournament simulation", () => {
     });
 
     it("total is the lowest of the three players", () => {
-      const oracle = scorePlayer(...Object.values(buildOracle()) as [any, any, any]);
-      const decent = scorePlayer(...Object.values(buildDecentPlayer()) as [any, any, any]);
+      const oracle = scoreOf(buildOracle());
+      const decent = scoreOf(buildDecentPlayer());
       expect(result.total).toBeLessThan(decent.total);
       expect(result.total).toBeLessThan(oracle.total);
     });
