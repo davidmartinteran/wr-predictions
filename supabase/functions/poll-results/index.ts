@@ -19,9 +19,11 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   scoreGroupMatch,
   scoreElimination,
+  scoreExtra,
   DEFAULT_RULES,
   type ScoringRules,
   type EliminationRound,
+  type ExtraKind,
 } from "../_shared/scoring-engine.ts";
 import { deriveActualRounds } from "../_shared/actual-rounds.ts";
 
@@ -289,6 +291,79 @@ async function recalcClassifications(supabase: SupabaseClient): Promise<number> 
   return rows.length;
 }
 
+// Recalcula la categoría EXTRAS: por cada extra que el admin haya resuelto
+// (pool_results_extra), compara la predicción de cada usuario (predictions_extra)
+// con el resultado usando scoreExtra. Es barata y no depende de partidos, así que
+// corre en cada pasada; si no hay resultados resueltos, sale sin tocar nada.
+async function recalcExtras(supabase: SupabaseClient): Promise<number> {
+  const { data: results, error: rErr } = await supabase
+    .from("pool_results_extra")
+    .select("pool_id, kind, value");
+  if (rErr) throw rErr;
+  if (!results?.length) return 0;
+
+  // pool_id → (kind → valor real)
+  const resultsByPool = new Map<string, Map<string, string>>();
+  for (const r of results) {
+    let m = resultsByPool.get(r.pool_id);
+    if (!m) {
+      m = new Map();
+      resultsByPool.set(r.pool_id, m);
+    }
+    m.set(r.kind, r.value);
+  }
+
+  const { data: pools, error: pErr } = await supabase
+    .from("pools")
+    .select("id, scoring_rules");
+  if (pErr) throw pErr;
+  const rulesByPool = new Map(
+    (pools ?? []).map((p) => [p.id, normalizeRules(p.scoring_rules)]),
+  );
+
+  // Solo predicciones de las porras que ya tienen algún resultado resuelto.
+  const { data: preds, error: prErr } = await supabase
+    .from("predictions_extra")
+    .select("user_id, pool_id, kind, value")
+    .in("pool_id", [...resultsByPool.keys()]);
+  if (prErr) throw prErr;
+
+  const totals = new Map<string, number>(); // key: pool_id|user_id
+  for (const pred of preds ?? []) {
+    const poolResults = resultsByPool.get(pred.pool_id);
+    const rules = rulesByPool.get(pred.pool_id);
+    if (!poolResults || !rules) continue;
+
+    const actual = poolResults.get(pred.kind);
+    const pts =
+      actual === undefined
+        ? 0
+        : scoreExtra({ kind: pred.kind as ExtraKind, value: pred.value }, actual, rules);
+
+    const key = `${pred.pool_id}|${pred.user_id}`;
+    totals.set(key, (totals.get(key) ?? 0) + pts);
+  }
+
+  const rows = [...totals.entries()].map(([key, points]) => {
+    const [pool_id, user_id] = key.split("|");
+    return {
+      pool_id,
+      user_id,
+      category: "EXTRAS",
+      points,
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  if (rows.length) {
+    const { error: upErr } = await supabase
+      .from("scores")
+      .upsert(rows, { onConflict: "user_id,pool_id,category" });
+    if (upErr) throw upErr;
+  }
+  return rows.length;
+}
+
 async function recalcResults(supabase: SupabaseClient): Promise<number> {
   const { data: finished, error: fErr } = await supabase
     .from("matches")
@@ -378,6 +453,10 @@ Deno.serve(async (req) => {
     );
     const force = new URL(req.url).searchParams.get("force") === "true";
 
+    // EXTRAS no depende de partidos: se recalcula en cada pasada (barata, sale
+    // sin tocar nada si el admin aún no ha resuelto ningún extra).
+    const extraRows = await recalcExtras(supabase);
+
     const now = Date.now();
     const { data: pending, error: mErr } = await supabase
       .from("matches")
@@ -392,7 +471,7 @@ Deno.serve(async (req) => {
     const doFill = force || new Date().getUTCMinutes() % 30 === 0;
 
     if (!pending?.length && !doFill) {
-      return json({ skipped: true, reason: "no matches in window" });
+      return json({ skipped: true, reason: "no matches in window", extraRows });
     }
 
     // code → id (rellenar cruces y ganadores), id → code (fallback por equipo)
@@ -504,6 +583,7 @@ Deno.serve(async (req) => {
       recalculated: transitionedToFinished || force,
       scoreRows,
       classificationRows,
+      extraRows,
     });
   } catch (err) {
     console.error("poll-results error:", err);
