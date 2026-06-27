@@ -26,6 +26,7 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
     const t = tournaments[0];
     return t ? toLocalInput(t.starts_at) : "";
   });
+  const [startsAt, setStartsAt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; invite_code: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -46,6 +47,7 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
         name,
         tournament_id: tournamentId,
         deadline: deadlineIso,
+        starts_at: startsAt ? new Date(startsAt).toISOString() : undefined,
         display_name: displayName,
       });
       if ("error" in res && res.error) {
@@ -172,6 +174,24 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
         />
         <p className="mt-1.5 text-xs text-muted-foreground">
           Después de esta fecha nadie podrá editar pronósticos.
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="starts_at" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Fecha de inicio <span className="normal-case tracking-normal">(opcional)</span>
+        </label>
+        <Input
+          id="starts_at"
+          type="datetime-local"
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+          className="mt-2 h-11 bg-zinc-950 border-zinc-800/80"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Para porras que empiezan tarde: los partidos jugados antes de esta
+          fecha saldrán con el resultado real y no puntuarán. Déjalo vacío para
+          una porra normal.
         </p>
       </div>
 

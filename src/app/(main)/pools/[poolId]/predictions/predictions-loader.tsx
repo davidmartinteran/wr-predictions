@@ -10,6 +10,7 @@ type Props = {
   targetUserId?: string;
   isAdmin: boolean;
   deadline: string;
+  startsAt?: string | null;
 };
 
 export async function PredictionsLoader({
@@ -20,10 +21,18 @@ export async function PredictionsLoader({
   targetUserId,
   isAdmin,
   deadline,
+  startsAt,
 }: Props) {
   const supabase = await createClient();
   const predictionsUserId =
     viewMode === "viewing-other" && targetUserId ? targetUserId : currentUserId;
+
+  // Porra tardía: empieza en startsAt y el bracket se siembra de los cruces
+  // reales de R32 (no de la clasificación predicha). `started` define si ya se
+  // puede rellenar; antes, todo sale bloqueado.
+  const isLatePool = startsAt != null;
+  const now = new Date();
+  const started = startsAt == null || new Date(startsAt) <= now;
 
   const [
     { data: matches },
@@ -38,6 +47,7 @@ export async function PredictionsLoader({
       .select(
         `
       id, group_letter, match_number, kickoff, stage,
+      home_score, away_score, status, finished,
       home:teams!matches_home_team_fkey(id, name, code, flag_emoji),
       away:teams!matches_away_team_fkey(id, name, code, flag_emoji)
     `,
@@ -123,6 +133,10 @@ export async function PredictionsLoader({
     group_letter: m.group_letter,
     match_number: m.match_number,
     kickoff: m.kickoff,
+    actual_home_score: (m as { home_score: number | null }).home_score,
+    actual_away_score: (m as { away_score: number | null }).away_score,
+    actual_status: (m as { status: string | null }).status,
+    actual_finished: (m as { finished: boolean | null }).finished,
     home_team_data: m.home as unknown as {
       id: string;
       name: string;
@@ -137,10 +151,41 @@ export async function PredictionsLoader({
     },
   }));
 
+  // Cruces reales de R32 (los rellena poll-results al terminar los grupos):
+  // siembran el bracket de una porra tardía. Solo se consultan en ese caso.
+  type TeamData = { id: string; name: string; code: string; flag_emoji: string | null };
+  let realR32: { matchNumber: number; homeTeam: TeamData | null; awayTeam: TeamData | null }[] = [];
+  if (isLatePool) {
+    const { data: r32 } = await supabase
+      .from("matches")
+      .select(
+        `
+        match_number,
+        home:teams!matches_home_team_fkey(id, name, code, flag_emoji),
+        away:teams!matches_away_team_fkey(id, name, code, flag_emoji)
+      `,
+      )
+      .eq("tournament_id", tournamentId)
+      .eq("stage", "R32")
+      .order("match_number");
+    realR32 = (r32 ?? []).map((m) => ({
+      matchNumber: m.match_number,
+      homeTeam: (m.home as unknown as TeamData | null) ?? null,
+      awayTeam: (m.away as unknown as TeamData | null) ?? null,
+    }));
+  }
+
   return (
     <PredictionsClient
       poolId={poolId}
       matches={formattedMatches}
+      isLatePool={isLatePool}
+      started={started}
+      startsAt={startsAt ?? null}
+      realR32={realR32}
+      tournamentStarted={formattedMatches.some(
+        (m) => new Date(m.kickoff) <= now,
+      )}
       predictions={(predictions ?? []).map((p) => ({
         match_id: p.match_id,
         home_score: p.home_score,

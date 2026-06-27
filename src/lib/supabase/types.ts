@@ -262,6 +262,7 @@ export type Database = {
           notifications_enabled: boolean
           scoring_frozen_at: string | null
           scoring_rules: Json
+          starts_at: string | null
           status: string
           tournament_id: string
           updated_at: string | null
@@ -276,6 +277,7 @@ export type Database = {
           notifications_enabled?: boolean
           scoring_frozen_at?: string | null
           scoring_rules?: Json
+          starts_at?: string | null
           status?: string
           tournament_id: string
           updated_at?: string | null
@@ -290,6 +292,7 @@ export type Database = {
           notifications_enabled?: boolean
           scoring_frozen_at?: string | null
           scoring_rules?: Json
+          starts_at?: string | null
           status?: string
           tournament_id?: string
           updated_at?: string | null
@@ -634,6 +637,7 @@ export type Database = {
         Row: {
           category: string
           exact_hits: number
+          sign_hits: number
           points: number
           pool_id: string
           updated_at: string | null
@@ -642,6 +646,7 @@ export type Database = {
         Insert: {
           category: string
           exact_hits?: number
+          sign_hits?: number
           points?: number
           pool_id: string
           updated_at?: string | null
@@ -650,6 +655,7 @@ export type Database = {
         Update: {
           category?: string
           exact_hits?: number
+          sign_hits?: number
           points?: number
           pool_id?: string
           updated_at?: string | null

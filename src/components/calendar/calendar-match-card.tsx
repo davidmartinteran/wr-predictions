@@ -158,8 +158,9 @@ export function CalendarMatchCard({ match, prediction, scoring, others }: Props)
 
   return (
     <div
+      id={`match-${match.id}`}
       className={cn(
-        "rounded-xl border p-3.5 transition-colors",
+        "scroll-mt-20 rounded-xl border p-3.5 transition-colors",
         live
           ? "border-rose-500/40 bg-zinc-900/60"
           : "border-zinc-800/80 bg-zinc-900/40"

@@ -284,6 +284,91 @@ export function buildBracketState(
   return { matches, champion, filledCount };
 }
 
+// ── Bracket sembrado desde los cruces REALES de R32 ──────────────
+// Para porras "tardías" (starts_at tras la fase de grupos): en vez de derivar
+// los cruces de R32 de la clasificación predicha, se siembran de los partidos
+// reales (poll-results ya rellenó home/away). Así no hay desempates de terceros
+// ni dependencia de standings: el jugador solo pica ganadores R32→Final.
+// Reutiliza la misma derivación de rondas siguientes que buildBracketState.
+
+export type RealR32Match = {
+  matchNumber: number; // fifaMatch en R32_MATCHUPS
+  homeTeam: TeamInfo | null;
+  awayTeam: TeamInfo | null;
+};
+
+export function buildBracketStateFromR32(
+  realR32: RealR32Match[],
+  knockoutPicks: Record<string, string>,
+): BracketState {
+  const matches: Record<Stage, BracketMatch[]> = {
+    R32: [],
+    R16: [],
+    QF: [],
+    SF: [],
+    FINAL: [],
+  };
+
+  const byMatchNumber = new Map(realR32.map((m) => [m.matchNumber, m]));
+
+  // R32 en orden de slot (R32_MATCHUPS mapea slot ↔ fifaMatch/match_number)
+  for (const mu of [...R32_MATCHUPS].sort((a, b) => a.slot - b.slot)) {
+    const real = byMatchNumber.get(mu.fifaMatch);
+    const homeTeam = real?.homeTeam ?? null;
+    const awayTeam = real?.awayTeam ?? null;
+
+    const winnerId = knockoutPicks[`R32:${mu.slot}`];
+    let winner: TeamInfo | null = null;
+    if (winnerId) {
+      if (homeTeam?.id === winnerId) winner = homeTeam;
+      else if (awayTeam?.id === winnerId) winner = awayTeam;
+    }
+
+    matches.R32.push({ stage: "R32", slot: mu.slot, homeTeam, awayTeam, winner });
+  }
+
+  // Rondas siguientes: idéntico a buildBracketState (cada slot lo alimentan los
+  // ganadores de sus dos slots padres).
+  for (let si = 1; si < STAGES.length; si++) {
+    const stage = STAGES[si];
+    const count = STAGE_MATCH_COUNTS[stage];
+
+    for (let slot = 0; slot < count; slot++) {
+      const parents = getParentSlots(stage, slot);
+      let homeTeam: TeamInfo | null = null;
+      let awayTeam: TeamInfo | null = null;
+
+      if (parents) {
+        const homeParent = matches[parents.stage][parents.homeSlot];
+        const awayParent = matches[parents.stage][parents.awaySlot];
+        homeTeam = homeParent?.winner ?? null;
+        awayTeam = awayParent?.winner ?? null;
+      }
+
+      const winnerId = knockoutPicks[`${stage}:${slot}`];
+      let winner: TeamInfo | null = null;
+      if (winnerId) {
+        if (homeTeam?.id === winnerId) winner = homeTeam;
+        else if (awayTeam?.id === winnerId) winner = awayTeam;
+      }
+
+      matches[stage].push({ stage, slot, homeTeam, awayTeam, winner });
+    }
+  }
+
+  const finalMatch = matches.FINAL[0];
+  const champion = finalMatch?.winner ?? null;
+
+  let filledCount = 0;
+  for (const stage of STAGES) {
+    for (const m of matches[stage]) {
+      if (m.winner) filledCount++;
+    }
+  }
+
+  return { matches, champion, filledCount };
+}
+
 // ── Cascading invalidation ───────────────────────────────────────
 
 export function cascadeInvalidation(

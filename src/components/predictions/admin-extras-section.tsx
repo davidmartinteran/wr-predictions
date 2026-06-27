@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Check, Search, Trophy, Award, Zap, Target, Shield, X, Star, ShieldCheck } from "lucide-react";
 import { TeamFlag } from "@/components/team-flag";
-import { PLAYERS, type Player } from "@/data/players";
+import { PLAYERS } from "@/data/players";
 
 type Team = {
   id: string;
@@ -32,7 +32,7 @@ const EXTRA_CARDS = [
 
 export const ADMIN_EXTRAS_TOTAL = 7;
 
-export function AdminExtrasSection({ poolId, results, allTeams, onResultChange, filledCount }: AdminExtrasSectionProps) {
+export function AdminExtrasSection({ results, allTeams, onResultChange, filledCount }: AdminExtrasSectionProps) {
   return (
     <div className="px-4 lg:px-6 xl:px-10 pt-3 lg:py-7 pb-52 lg:pb-10 lg:max-w-[920px]">
       <div className="flex items-center justify-between mb-1">

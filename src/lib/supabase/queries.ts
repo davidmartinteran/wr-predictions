@@ -13,7 +13,7 @@ export const getPool = cache(async (poolId: string) => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("pools")
-    .select("id, name, status, deadline, invite_code, tournament_id")
+    .select("id, name, status, deadline, starts_at, invite_code, tournament_id")
     .eq("id", poolId)
     .maybeSingle();
   return data;

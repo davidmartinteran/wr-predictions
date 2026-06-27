@@ -18,10 +18,13 @@ function CalendarSkeleton() {
 
 export default async function CalendarPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ poolId: string }>;
+  searchParams: Promise<{ match?: string }>;
 }) {
   const { poolId } = await params;
+  const { match: focusMatchId } = await searchParams;
   const user = await getUser();
   if (!user) notFound();
 
@@ -43,6 +46,7 @@ export default async function CalendarPage({
           currentUserId={user.id}
           isPastDeadline={isPastDeadline}
           isAdmin={participation.is_admin}
+          focusMatchId={focusMatchId}
         />
       </Suspense>
     </div>

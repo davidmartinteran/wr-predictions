@@ -22,6 +22,9 @@ export function NotificationBanner({ poolId }: { poolId: string }) {
     if (isPushGranted()) return;
     if (isPushDenied()) return;
     if (localStorage.getItem(dismissedKey)) return;
+    // Lectura de estado del navegador (push/localStorage) tras montar: hacerlo
+    // en un efecto evita el mismatch de hidratación (server y 1er render = oculto).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisible(true);
   }, [dismissedKey]);
 

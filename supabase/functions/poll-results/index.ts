@@ -322,7 +322,7 @@ async function recalcResults(supabase: SupabaseClient): Promise<number> {
     (pools ?? []).map((p) => [p.id, normalizeRules(p.scoring_rules)]),
   );
 
-  type Acc = { points: number; exact_hits: number };
+  type Acc = { points: number; exact_hits: number; sign_hits: number };
   const totals = new Map<string, Acc>(); // key: pool_id|user_id
 
   for (const pred of preds ?? []) {
@@ -340,9 +340,11 @@ async function recalcResults(supabase: SupabaseClient): Promise<number> {
     );
 
     const key = `${pred.pool_id}|${pred.user_id}`;
-    const acc = totals.get(key) ?? { points: 0, exact_hits: 0 };
+    const acc = totals.get(key) ?? { points: 0, exact_hits: 0, sign_hits: 0 };
     acc.points += score.points;
     if (score.exact_hit) acc.exact_hits += 1;
+    // Signo acertado pero sin marcador exacto (1X2 correcto, 1 pt base).
+    else if (score.points > 0) acc.sign_hits += 1;
     totals.set(key, acc);
   }
 
@@ -354,6 +356,7 @@ async function recalcResults(supabase: SupabaseClient): Promise<number> {
       category: "RESULTS",
       points: acc.points,
       exact_hits: acc.exact_hits,
+      sign_hits: acc.sign_hits,
       updated_at: new Date().toISOString(),
     };
   });

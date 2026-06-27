@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
+import Link from "next/link";
+import { CalendarDays } from "lucide-react";
 import { TeamBadge } from "./team-badge";
 import { ScoreInput } from "./score-input";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,7 @@ type MatchCardProps = {
   disabled?: boolean;
   onScoreChange: (matchId: string, home: number | null, away: number | null) => void;
   complete?: boolean;
+  calendarHref?: string;
 };
 
 export function MatchCard({
@@ -36,6 +39,7 @@ export function MatchCard({
   disabled,
   onScoreChange,
   complete: completeProp,
+  calendarHref,
 }: MatchCardProps) {
   const complete = completeProp ?? (homeScore !== null && awayScore !== null);
 
@@ -100,6 +104,15 @@ export function MatchCard({
         />
       </div>
 
+      {calendarHref && (
+        <Link
+          href={calendarHref}
+          className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <CalendarDays className="w-3 h-3" />
+          Ver en calendario
+        </Link>
+      )}
     </div>
   );
 }
