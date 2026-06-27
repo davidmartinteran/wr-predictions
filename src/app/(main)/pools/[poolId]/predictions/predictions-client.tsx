@@ -129,6 +129,7 @@ type Props = {
   startsAt?: string | null;
   realR32?: RealR32Match[];
   tournamentStarted?: boolean;
+  hideExtras?: boolean;
   predictions: Prediction[];
   extraPredictions: ExtraPrediction[];
   allTeams: Team[];
@@ -176,6 +177,7 @@ export function PredictionsClient({
   startsAt = null,
   realR32 = [],
   tournamentStarted = false,
+  hideExtras = false,
   predictions,
   extraPredictions,
   allTeams,
@@ -795,6 +797,7 @@ export function PredictionsClient({
     started,
     startsAt,
     r32Ready,
+    hideExtras,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -888,6 +891,7 @@ type LayoutProps = {
   started: boolean;
   startsAt: string | null;
   r32Ready: boolean;
+  hideExtras: boolean;
   activeSection: Section;
   setActiveSection: (s: Section) => void;
   sectionCounts: SectionCounts;
@@ -991,6 +995,7 @@ function MobileLayout(props: LayoutProps) {
     started,
     startsAt,
     r32Ready,
+    hideExtras,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -1118,14 +1123,16 @@ function MobileLayout(props: LayoutProps) {
             locked={viewMode === "own-open"}
             onClick={() => setActiveSection("bracket")}
           />
-          <MobileSectionPill
-            active={activeSection === "extras"}
-            icon={<Star className="w-3.5 h-3.5" />}
-            label="Extras"
-            count={`${sectionCounts.extras.filled}/${sectionCounts.extras.total}`}
-            color={viewMode === "own-open" ? "#F59E0B" : accentColor}
-            onClick={() => setActiveSection("extras")}
-          />
+          {!hideExtras && (
+            <MobileSectionPill
+              active={activeSection === "extras"}
+              icon={<Star className="w-3.5 h-3.5" />}
+              label="Extras"
+              count={`${sectionCounts.extras.filled}/${sectionCounts.extras.total}`}
+              color={viewMode === "own-open" ? "#F59E0B" : accentColor}
+              onClick={() => setActiveSection("extras")}
+            />
+          )}
           {isAdmin && (
             <MobileSectionPill
               active={activeSection === "admin"}
@@ -1304,7 +1311,7 @@ function MobileLayout(props: LayoutProps) {
             onClear={handleClearBracket}
           />
         ) : null)}
-      {activeSection === "extras" && (
+      {activeSection === "extras" && !hideExtras && (
         <div className="flex-1 overflow-y-auto scrollbar-thin min-h-0">
           <ExtrasSection
             extras={extras}
@@ -1490,6 +1497,7 @@ function DesktopLayout(
     started,
     startsAt,
     r32Ready,
+    hideExtras,
     activeSection,
     setActiveSection,
     sectionCounts,
@@ -1712,15 +1720,17 @@ function DesktopLayout(
               locked={viewMode === "own-open"}
               onClick={() => setActiveSection("bracket")}
             />
-            <DesktopSectionItem
-              active={activeSection === "extras"}
-              icon={<Star className="w-4 h-4" />}
-              label="Extras"
-              filled={sectionCounts.extras.filled}
-              total={sectionCounts.extras.total}
-              color={viewMode === "own-open" ? "#F59E0B" : accentColor}
-              onClick={() => setActiveSection("extras")}
-            />
+            {!hideExtras && (
+              <DesktopSectionItem
+                active={activeSection === "extras"}
+                icon={<Star className="w-4 h-4" />}
+                label="Extras"
+                filled={sectionCounts.extras.filled}
+                total={sectionCounts.extras.total}
+                color={viewMode === "own-open" ? "#F59E0B" : accentColor}
+                onClick={() => setActiveSection("extras")}
+              />
+            )}
             {isAdmin && (
               <DesktopSectionItem
                 active={activeSection === "admin"}
@@ -2009,7 +2019,7 @@ function DesktopLayout(
               />
             ) : null)}
 
-          {activeSection === "extras" && (
+          {activeSection === "extras" && !hideExtras && (
             <ExtrasSection
               extras={extras}
               allTeams={allTeams}

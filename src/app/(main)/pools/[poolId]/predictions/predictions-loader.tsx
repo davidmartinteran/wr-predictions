@@ -11,6 +11,7 @@ type Props = {
   isAdmin: boolean;
   deadline: string;
   startsAt?: string | null;
+  hideExtras?: boolean;
 };
 
 export async function PredictionsLoader({
@@ -22,6 +23,7 @@ export async function PredictionsLoader({
   isAdmin,
   deadline,
   startsAt,
+  hideExtras,
 }: Props) {
   const supabase = await createClient();
   const predictionsUserId =
@@ -182,6 +184,7 @@ export async function PredictionsLoader({
       isLatePool={isLatePool}
       started={started}
       startsAt={startsAt ?? null}
+      hideExtras={hideExtras ?? false}
       realR32={realR32}
       tournamentStarted={formattedMatches.some(
         (m) => new Date(m.kickoff) <= now,

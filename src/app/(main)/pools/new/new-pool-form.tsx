@@ -27,6 +27,7 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
     return t ? toLocalInput(t.starts_at) : "";
   });
   const [startsAt, setStartsAt] = useState("");
+  const [hideExtras, setHideExtras] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; invite_code: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -48,6 +49,7 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
         tournament_id: tournamentId,
         deadline: deadlineIso,
         starts_at: startsAt ? new Date(startsAt).toISOString() : undefined,
+        hide_extras: hideExtras,
         display_name: displayName,
       });
       if ("error" in res && res.error) {
@@ -194,6 +196,24 @@ export function NewPoolForm({ tournaments, defaultDisplayName }: Props) {
           una porra normal.
         </p>
       </div>
+
+      <label className="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={hideExtras}
+          onChange={(e) => setHideExtras(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950 accent-[#1B9E5B]"
+        />
+        <span>
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Ocultar extras
+          </span>
+          <span className="block mt-0.5 text-xs text-muted-foreground normal-case tracking-normal">
+            Quita la sección de predicciones extra (Bota de Oro, mejor jugador…).
+            Útil para porras de solo bracket.
+          </span>
+        </span>
+      </label>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

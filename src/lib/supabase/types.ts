@@ -256,6 +256,7 @@ export type Database = {
           created_at: string | null
           created_by: string
           deadline: string
+          hide_extras: boolean
           id: string
           invite_code: string
           name: string
@@ -271,6 +272,7 @@ export type Database = {
           created_at?: string | null
           created_by: string
           deadline: string
+          hide_extras?: boolean
           id?: string
           invite_code?: string
           name: string
@@ -286,6 +288,7 @@ export type Database = {
           created_at?: string | null
           created_by?: string
           deadline?: string
+          hide_extras?: boolean
           id?: string
           invite_code?: string
           name?: string

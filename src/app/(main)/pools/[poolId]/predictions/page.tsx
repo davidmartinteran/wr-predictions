@@ -47,6 +47,7 @@ export default async function PredictionsPage({
           isAdmin={isAdmin}
           deadline={pool.deadline}
           startsAt={pool.starts_at}
+          hideExtras={pool.hide_extras}
         />
       </Suspense>
     </div>
