@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Plus, Trophy, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -46,6 +47,9 @@ export default async function PoolsListPage() {
   }
 
   const firstPoolId = rows[0]?.pool_id;
+
+  // Porra en la que estás (última visitada, vía cookie del middleware).
+  const currentPoolId = (await cookies()).get("current_pool")?.value ?? null;
 
   return (
     <div className="fixed inset-0 flex flex-col pt-[env(safe-area-inset-top)]">
@@ -129,16 +133,30 @@ export default async function PoolsListPage() {
           ) : (
             <>
               <ul className="space-y-3">
-                {rows.map((r) =>
-                  r.pools ? (
+                {rows.map((r) => {
+                  if (!r.pools) return null;
+                  const isCurrent = r.pool_id === currentPoolId;
+                  return (
                     <li key={r.pool_id}>
                       <Link
                         href={`/pools/${r.pool_id}/predictions`}
-                        className="block rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-5 hover:border-zinc-700 transition-colors"
+                        className={`block rounded-xl border p-5 transition-colors ${
+                          isCurrent
+                            ? "border-primary/70 bg-primary/5"
+                            : "border-zinc-800/80 bg-zinc-900/40 hover:border-zinc-700"
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <h3 className="text-base font-semibold truncate">{r.pools.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-semibold truncate">{r.pools.name}</h3>
+                              {isCurrent && (
+                                <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                  Aquí
+                                </span>
+                              )}
+                            </div>
                             <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
                                 <Users className="h-3.5 w-3.5" />
@@ -156,8 +174,8 @@ export default async function PoolsListPage() {
                         </div>
                       </Link>
                     </li>
-                  ) : null
-                )}
+                  );
+                })}
               </ul>
 
               <div className="mt-6">
