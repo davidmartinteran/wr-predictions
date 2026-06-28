@@ -137,6 +137,8 @@ export default async function LeaderboardPage({
       isLive={isLive}
       canViewOthers={isPastDeadline}
       deadline={pool.deadline}
+      showResults={!pool.starts_at}
+      showExtras={!pool.hide_extras}
     />
   );
 }

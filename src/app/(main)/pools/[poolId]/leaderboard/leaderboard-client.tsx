@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, createContext, useContext } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,12 @@ const SCORE_CATS: ScoreCat[] = [
   ]},
 ];
 
+// Categorías visibles según la config de la porra (p.ej. una porra de solo
+// bracket oculta Resultados y Extras). Se proveen por contexto para no enhebrar
+// el array por todos los subcomponentes.
+const CatsContext = createContext<ScoreCat[]>(SCORE_CATS);
+const useCats = () => useContext(CatsContext);
+
 const GOLD = "#D4AF37";
 
 function hexAlpha(hex: string, a: number) {
@@ -48,6 +54,8 @@ type Props = {
   isLive: boolean;
   canViewOthers: boolean;
   deadline: string;
+  showResults?: boolean;
+  showExtras?: boolean;
 };
 
 function formatDeadline(iso: string): string {
@@ -56,7 +64,16 @@ function formatDeadline(iso: string): string {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline }: Props) {
+export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline, showResults = true, showExtras = true }: Props) {
+  const visibleCats = useMemo(
+    () =>
+      SCORE_CATS.filter(
+        (c) =>
+          (c.key !== "RESULTS" || showResults) &&
+          (c.key !== "EXTRAS" || showExtras),
+      ),
+    [showResults, showExtras],
+  );
   const [metric, setMetric] = useState<Category>("TOTAL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const router = useRouter();
@@ -90,14 +107,14 @@ export function LeaderboardClient({ poolId, poolName, players, playerCount, isLi
   const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel };
 
   return (
-    <>
+    <CatsContext.Provider value={visibleCats}>
       <div className="contents lg:hidden">
         <MobileLayout {...sharedProps} />
       </div>
       <div className="hidden lg:contents">
         <DesktopLayout {...sharedProps} />
       </div>
-    </>
+    </CatsContext.Provider>
   );
 }
 
@@ -118,9 +135,10 @@ type LayoutProps = {
 // ─── Primitives ──────────────────────────────────────────────
 
 function CategoryFilter({ active, onChange }: { active: Category; onChange: (m: Category) => void }) {
+  const cats = useCats();
   const items: { key: Category; short: string; color: string }[] = [
     { key: "TOTAL", short: "Total", color: "#fafafa" },
-    ...SCORE_CATS.map((c) => ({ key: c.key, short: c.short, color: c.color })),
+    ...cats.map((c) => ({ key: c.key, short: c.short, color: c.color })),
   ];
   return (
     <div className="flex gap-1.5 overflow-x-auto scrollbar-none -mx-1 px-1">
@@ -182,10 +200,11 @@ function PointsMono({ value, size = 16, className }: { value: number; size?: num
 }
 
 function StackedBar({ player, height = 6 }: { player: PlayerEntry; height?: number }) {
+  const cats = useCats();
   const total = player.scores.TOTAL || 1;
   return (
     <div className="flex w-full overflow-hidden rounded-full" style={{ height, background: "rgb(39 39 42 / 0.6)" }}>
-      {SCORE_CATS.map((c) => {
+      {cats.map((c) => {
         const v = player.scores[c.key];
         if (v === 0) return null;
         return <div key={c.key} style={{ width: `${(v / total) * 100}%`, background: c.color, opacity: 0.85 }} />;
@@ -204,9 +223,10 @@ function LiveBadge() {
 }
 
 function CategoryDots() {
+  const cats = useCats();
   return (
     <div className="flex items-center gap-1.5 text-[10px] text-zinc-600">
-      {SCORE_CATS.map((c) => (
+      {cats.map((c) => (
         <span key={c.key} className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.color }} />
           {c.abbr}
@@ -258,6 +278,7 @@ function CategoryBar({ cat, value, expanded, onToggle, compact }: { cat: ScoreCa
 // ─── Breakdown (expand) ──────────────────────────────────────
 
 function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+  const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
   return (
@@ -265,7 +286,7 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pla
       <div className="rounded-lg border border-zinc-800/60 p-3" style={{ background: "rgb(9 9 11 / 0.6)" }}>
         <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 mb-2.5">Desglose</div>
         <div className="space-y-2">
-          {SCORE_CATS.map((c) => (
+          {cats.map((c) => (
             <CategoryBar
               key={c.key}
               cat={c}
@@ -294,6 +315,7 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pla
 }
 
 function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+  const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
   return (
@@ -305,7 +327,7 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pl
             Desglose · cómo se construyen los {player.scores.TOTAL} pts
           </div>
           <div className="space-y-2.5">
-            {SCORE_CATS.map((c) => (
+            {cats.map((c) => (
               <CategoryBar
                 key={c.key}
                 cat={c}
@@ -456,6 +478,7 @@ function PodiumSlot({ player, rank, height, avatarSize, showStar }: {
 // ─── Desktop Layout ──────────────────────────────────────────
 
 function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel }: LayoutProps) {
+  const cats = useCats();
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -488,7 +511,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
           <div className="flex items-center px-4 py-2.5 border-b border-zinc-800/80 text-[10px] uppercase tracking-[0.12em] text-zinc-500 font-medium">
             <div className="w-[52px] flex items-center gap-1.5">Pos. <span className="text-zinc-700">↕</span></div>
             <div className="flex-1">Jugador</div>
-            {SCORE_CATS.map((c) => (
+            {cats.map((c) => (
               <div key={c.key} className="w-[80px] text-right flex items-center justify-end gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.color }} />
                 {c.short}
@@ -535,7 +558,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                   </div>
 
                   {/* Category scores */}
-                  {SCORE_CATS.map((c) => (
+                  {cats.map((c) => (
                     <div key={c.key} className="w-[80px] text-right tabular-nums">
                       <span
                         className="text-[13px] font-semibold"
