@@ -4,14 +4,54 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamFlag } from "@/components/team-flag";
-import type { PlayerBracket, TeamPick } from "./page";
+import type { PlayerBracket, TeamPick, ScoringRow } from "./page";
 
 type Props = {
   poolName: string;
   players: PlayerBracket[];
   currentUserId: string;
   initialUserId?: string;
+  scoringTable: ScoringRow[];
 };
+
+const MONO = "var(--font-mono), ui-monospace, monospace";
+
+// Tablilla informativa: cuánto vale cada ronda (acierto exacto / ±1 mitad / ±2 cuarto).
+function ScoringTable({ rows }: { rows: ScoringRow[] }) {
+  if (rows.length === 0) return null;
+  const cols = "grid grid-cols-[1fr_2.1rem_2.1rem_2.1rem] gap-x-2";
+  return (
+    <div className="mt-4 rounded-xl border border-zinc-800/80 bg-zinc-900/40">
+      <div className="px-4 pt-3 pb-2.5">
+        <div className="text-[10px] uppercase tracking-wider text-zinc-400 mb-2.5">
+          Cómo se puntúa cada ronda
+        </div>
+        <div className={cn(cols, "mb-1.5 text-[9px] uppercase tracking-wider text-zinc-600")}>
+          <span />
+          <span className="text-right">Exacto</span>
+          <span className="text-right">±1</span>
+          <span className="text-right">±2</span>
+        </div>
+        <div className="space-y-1">
+          {rows.map((r) => (
+            <div key={r.label} className={cn(cols, "items-center")}>
+              <span className="text-[11.5px] text-zinc-300 truncate">{r.label}</span>
+              <span className="text-right text-[12px] font-bold text-zinc-100 tabular-nums" style={{ fontFamily: MONO }}>{r.exact}</span>
+              <span className="text-right text-[11px] text-zinc-500 tabular-nums" style={{ fontFamily: MONO }}>{r.half}</span>
+              <span className="text-right text-[11px] text-zinc-600 tabular-nums" style={{ fontFamily: MONO }}>{r.quarter}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 py-2.5 border-t border-zinc-800/60 text-[9.5px] text-zinc-600 leading-relaxed space-y-0.5">
+        <div>Ronda exacta → puntos completos</div>
+        <div>±1 ronda de distancia → la mitad</div>
+        <div>±2 rondas → un cuarto</div>
+        <div>±3 o más → 0</div>
+      </div>
+    </div>
+  );
+}
 
 function PtsBadge({ points }: { points: number | null }) {
   if (points === null) {
@@ -29,6 +69,16 @@ function PtsBadge({ points }: { points: number | null }) {
       )}
     >
       {points > 0 ? `+${points}` : "0"}
+    </span>
+  );
+}
+
+// Dónde se quedó de verdad la selección (ronda real alcanzada).
+function ActualBadge({ label }: { label: string | null }) {
+  if (!label) return null;
+  return (
+    <span className="text-[9.5px] font-medium text-zinc-500 px-1.5 py-0.5 rounded bg-zinc-800/60 whitespace-nowrap">
+      {label}
     </span>
   );
 }
@@ -78,7 +128,10 @@ function Round({ label, teams }: { label: string; teams: TeamPick[] }) {
                 <TeamFlag code={t.code} size={18} className="shrink-0" />
                 <span className="truncate">{t.name}</span>
               </span>
-              <PtsBadge points={t.points} />
+              <span className="flex items-center gap-1.5 shrink-0">
+                <ActualBadge label={t.actualLabel} />
+                <PtsBadge points={t.points} />
+              </span>
             </div>
           ))}
         </div>
@@ -114,7 +167,12 @@ function PlayerCard({ p }: { p: PlayerBracket }) {
               </div>
             </div>
           </div>
-          {p.champion && <PtsBadge points={p.champion.points} />}
+          {p.champion && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <ActualBadge label={p.champion.actualLabel} />
+              <PtsBadge points={p.champion.points} />
+            </div>
+          )}
         </div>
 
         {p.runnerUp && (
@@ -128,7 +186,10 @@ function PlayerCard({ p }: { p: PlayerBracket }) {
                 {p.runnerUp.name}
               </span>
             </div>
-            <PtsBadge points={p.runnerUp.points} />
+            <span className="flex items-center gap-1.5 shrink-0">
+              <ActualBadge label={p.runnerUp.actualLabel} />
+              <PtsBadge points={p.runnerUp.points} />
+            </span>
           </div>
         )}
       </div>
@@ -137,11 +198,12 @@ function PlayerCard({ p }: { p: PlayerBracket }) {
       <Round label="Cuartos" teams={p.qf} />
       <Round label="Octavos" teams={p.r16} />
       <Round label="Dieciseisavos" teams={p.r32} />
+      <Round label="No pasan de grupos" teams={p.group} />
     </div>
   );
 }
 
-export function BracketsClient({ poolName, players, currentUserId, initialUserId }: Props) {
+export function BracketsClient({ poolName, players, currentUserId, initialUserId, scoringTable }: Props) {
   const start = Math.max(
     0,
     players.findIndex((p) => p.userId === (initialUserId ?? currentUserId)),
@@ -192,6 +254,8 @@ export function BracketsClient({ poolName, players, currentUserId, initialUserId
         </div>
 
         <PlayerCard p={p} />
+
+        <ScoringTable rows={scoringTable} />
       </div>
     </div>
   );

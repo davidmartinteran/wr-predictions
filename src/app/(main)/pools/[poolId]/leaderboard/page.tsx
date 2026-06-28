@@ -11,6 +11,8 @@ type ScoreRow = {
   sign_hits: number;
 };
 
+export type GroupHits = { group: string; exactos: number; signos: number };
+
 export type PlayerEntry = {
   userId: string;
   displayName: string;
@@ -30,7 +32,12 @@ export type PlayerEntry = {
   };
   exactHits: number;
   signHits: number;
+  groupHits: GroupHits[];
 };
+
+function sign(home: number, away: number): "1" | "X" | "2" {
+  return home > away ? "1" : home < away ? "2" : "X";
+}
 
 const MAX_SCORES = {
   RESULTS: 225,
@@ -74,6 +81,72 @@ export default async function LeaderboardPage({
 
   if (!pool) notFound();
 
+  const isPastDeadline = pool.deadline
+    ? new Date(pool.deadline) < new Date()
+    : false;
+
+  // Aciertos por grupo (solo porra completa, tras el cierre): exactos y signos
+  // de cada jugador en los partidos de grupo ya jugados, de un vistazo.
+  const groupHitsByUser = new Map<string, GroupHits[]>();
+  if (!pool.starts_at && isPastDeadline) {
+    const [{ data: groupMatches }, { data: groupPreds }] = await Promise.all([
+      supabase
+        .from("matches")
+        .select("id, group_letter, home_score, away_score")
+        .eq("tournament_id", pool.tournament_id)
+        .eq("stage", "GROUP")
+        .eq("finished", true),
+      supabase
+        .from("predictions_match")
+        .select("user_id, match_id, home_score, away_score")
+        .eq("pool_id", poolId),
+    ]);
+
+    const matchById = new Map(
+      (groupMatches ?? [])
+        .filter(
+          (m) =>
+            m.group_letter && m.home_score !== null && m.away_score !== null,
+        )
+        .map((m) => [m.id, m]),
+    );
+    const acc = new Map<
+      string,
+      Map<string, { exactos: number; signos: number }>
+    >();
+    for (const p of groupPreds ?? []) {
+      if (p.home_score === null || p.away_score === null) continue;
+      const m = matchById.get(p.match_id);
+      if (!m) continue;
+      const g = m.group_letter as string;
+      let byGroup = acc.get(p.user_id);
+      if (!byGroup) {
+        byGroup = new Map();
+        acc.set(p.user_id, byGroup);
+      }
+      let cell = byGroup.get(g);
+      if (!cell) {
+        cell = { exactos: 0, signos: 0 };
+        byGroup.set(g, cell);
+      }
+      if (p.home_score === m.home_score && p.away_score === m.away_score) {
+        cell.exactos++;
+      } else if (
+        sign(p.home_score, p.away_score) === sign(m.home_score!, m.away_score!)
+      ) {
+        cell.signos++;
+      }
+    }
+    for (const [userId, byGroup] of acc) {
+      groupHitsByUser.set(
+        userId,
+        [...byGroup.entries()]
+          .map(([group, c]) => ({ group, exactos: c.exactos, signos: c.signos }))
+          .sort((a, b) => a.group.localeCompare(b.group)),
+      );
+    }
+  }
+
   const scoresByUser: Record<string, ScoreRow[]> = {};
   for (const row of scoreRows ?? []) {
     if (!scoresByUser[row.user_id]) scoresByUser[row.user_id] = [];
@@ -116,6 +189,7 @@ export default async function LeaderboardPage({
       maxScores: MAX_SCORES,
       exactHits,
       signHits,
+      groupHits: groupHitsByUser.get(p.user_id) ?? [],
     };
   });
 
@@ -124,9 +198,6 @@ export default async function LeaderboardPage({
   );
 
   const isLive = pool.status === "LIVE" || pool.status === "REVEALED";
-  const isPastDeadline = pool.deadline
-    ? new Date(pool.deadline) < new Date()
-    : false;
 
   return (
     <LeaderboardClient
@@ -140,6 +211,7 @@ export default async function LeaderboardPage({
       showResults={!pool.starts_at}
       showExtras={!pool.hide_extras}
       showBrackets={!!pool.starts_at && isPastDeadline}
+      bracketBreakdown={!pool.starts_at && isPastDeadline}
     />
   );
 }

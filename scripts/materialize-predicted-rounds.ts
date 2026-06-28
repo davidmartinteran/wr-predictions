@@ -153,12 +153,18 @@ async function main() {
     }
     const rounds = derivePredictedRounds(bracket, allTeamIds);
 
-    const rows = Object.entries(rounds).map(([team_id, round]) => ({
-      user_id,
-      pool_id,
-      team_id,
-      round,
-    }));
+    // En porras de solo eliminatorias (sembradas del R32 real) las 16 selecciones
+    // que cayeron en grupos se autoasignan a GROUP sin que nadie las prediga: no
+    // se materializan (no deben puntuar — solo cuentan las eliminadas en R32+).
+    const isLate = lateStartByPool.get(pool_id) === true;
+    const rows = Object.entries(rounds)
+      .filter(([, round]) => !(isLate && round === "GROUP"))
+      .map(([team_id, round]) => ({
+        user_id,
+        pool_id,
+        team_id,
+        round,
+      }));
 
     const { error: delErr } = await supabase
       .from("predicted_team_rounds")

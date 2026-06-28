@@ -244,10 +244,19 @@ async function recalcClassifications(supabase: SupabaseClient): Promise<number> 
 
   const spainIds = new Set((teams ?? []).filter((t) => t.code === "ESP").map((t) => t.id));
 
-  const { data: pools, error: pErr } = await supabase.from("pools").select("id, scoring_rules");
+  const { data: pools, error: pErr } = await supabase
+    .from("pools")
+    .select("id, scoring_rules, starts_at");
   if (pErr) throw pErr;
   const rulesByPool = new Map(
     (pools ?? []).map((p) => [p.id, normalizeRules(p.scoring_rules)]),
+  );
+  // Porras de solo eliminatorias (starts_at): el cuadro se siembra del R32 real,
+  // así que las 16 selecciones que cayeron en grupos se autoasignan a GROUP sin
+  // que nadie las prediga. No deben puntuar — solo cuentan las eliminadas en el
+  // cuadro (R32+).
+  const latePools = new Set(
+    (pools ?? []).filter((p) => p.starts_at != null).map((p) => p.id),
   );
 
   const { data: preds, error: prErr } = await supabase
@@ -257,6 +266,7 @@ async function recalcClassifications(supabase: SupabaseClient): Promise<number> 
 
   const totals = new Map<string, number>(); // key: pool_id|user_id
   for (const pred of preds ?? []) {
+    if (pred.round === "GROUP" && latePools.has(pred.pool_id)) continue;
     const actualRound = actual[pred.team_id];
     const rules = rulesByPool.get(pred.pool_id);
     if (!actualRound || !rules) continue;
