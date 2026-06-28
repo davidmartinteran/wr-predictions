@@ -56,6 +56,7 @@ type Props = {
   deadline: string;
   showResults?: boolean;
   showExtras?: boolean;
+  showBrackets?: boolean;
 };
 
 function formatDeadline(iso: string): string {
@@ -64,7 +65,7 @@ function formatDeadline(iso: string): string {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline, showResults = true, showExtras = true }: Props) {
+export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline, showResults = true, showExtras = true, showBrackets = false }: Props) {
   const visibleCats = useMemo(
     () =>
       SCORE_CATS.filter(
@@ -104,7 +105,7 @@ export function LeaderboardClient({ poolId, poolName, players, playerCount, isLi
     setExpandedId((prev) => (prev === userId ? null : userId));
   }, []);
 
-  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel };
+  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets };
 
   return (
     <CatsContext.Provider value={visibleCats}>
@@ -130,6 +131,7 @@ type LayoutProps = {
   isLive: boolean;
   canViewOthers: boolean;
   deadlineLabel: string;
+  showBrackets: boolean;
 };
 
 // ─── Primitives ──────────────────────────────────────────────
@@ -277,10 +279,16 @@ function CategoryBar({ cat, value, expanded, onToggle, compact }: { cat: ScoreCa
 
 // ─── Breakdown (expand) ──────────────────────────────────────
 
-function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean }) {
   const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
+  const href = showBrackets
+    ? `/pools/${poolId}/brackets?player=${player.userId}`
+    : player.isCurrentUser
+      ? `/pools/${poolId}/predictions`
+      : `/pools/${poolId}/predictions?player=${player.userId}`;
+  const cta = showBrackets ? "Ver bracket de" : "Ver porra de";
   return (
     <div className="px-3 pb-3 -mt-1">
       <div className="rounded-lg border border-zinc-800/60 p-3" style={{ background: "rgb(9 9 11 / 0.6)" }}>
@@ -299,10 +307,10 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pla
         </div>
         {canView ? (
           <a
-            href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+            href={href}
             className="mt-3 block w-full h-8 rounded-lg text-[11.5px] font-medium text-zinc-300 border border-zinc-800 hover:bg-zinc-800/60 transition-colors flex items-center justify-center"
           >
-            Ver porra de {player.displayName.split(" ")[0]} →
+            {cta} {player.displayName.split(" ")[0]} →
           </a>
         ) : !player.isCurrentUser && (
           <div className="mt-3 w-full h-8 rounded-lg text-[11px] text-zinc-600 border border-zinc-800/40 flex items-center justify-center">
@@ -314,10 +322,15 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pla
   );
 }
 
-function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string }) {
+function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean }) {
   const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
+  const href = showBrackets
+    ? `/pools/${poolId}/brackets?player=${player.userId}`
+    : player.isCurrentUser
+      ? `/pools/${poolId}/predictions`
+      : `/pools/${poolId}/predictions?player=${player.userId}`;
   return (
     <div className="px-4 py-4 border-t border-zinc-800/60" style={{ background: "rgb(9 9 11 / 0.4)" }}>
       <div className="flex gap-8">
@@ -358,10 +371,10 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pl
           )}
           {canView ? (
             <a
-              href={player.isCurrentUser ? `/pools/${poolId}/predictions` : `/pools/${poolId}/predictions?player=${player.userId}`}
+              href={href}
               className="block w-full h-9 rounded-lg text-[12.5px] font-medium text-zinc-200 border border-zinc-800 hover:bg-zinc-900 transition-colors flex items-center justify-center"
             >
-              Ver pronósticos de {player.displayName.split(" ")[0]} →
+              {showBrackets ? "Ver bracket de" : "Ver pronósticos de"} {player.displayName.split(" ")[0]} →
             </a>
           ) : !player.isCurrentUser && (
             <div className="w-full h-9 rounded-lg text-[12px] text-zinc-600 border border-zinc-800/40 flex items-center justify-center">
@@ -376,7 +389,7 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel }: { pl
 
 // ─── Mobile Layout ───────────────────────────────────────────
 
-function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive, canViewOthers, deadlineLabel }: LayoutProps) {
+function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -434,7 +447,7 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
                   </div>
                   <ChevronRight className={cn("w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0", isOpen && "rotate-90")} />
                 </button>
-                {isOpen && <MobileBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} />}
+                {isOpen && <MobileBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} />}
               </div>
             );
           })}
@@ -477,7 +490,7 @@ function PodiumSlot({ player, rank, height, avatarSize, showStar }: {
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel }: LayoutProps) {
+function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets }: LayoutProps) {
   const cats = useCats();
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
@@ -581,7 +594,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                   </div>
                 </button>
 
-                {isOpen && <DesktopBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} />}
+                {isOpen && <DesktopBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} />}
               </div>
             );
           })}

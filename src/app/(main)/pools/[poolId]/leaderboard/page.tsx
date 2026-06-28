@@ -139,6 +139,7 @@ export default async function LeaderboardPage({
       deadline={pool.deadline}
       showResults={!pool.starts_at}
       showExtras={!pool.hide_extras}
+      showBrackets={!!pool.starts_at && isPastDeadline}
     />
   );
 }
