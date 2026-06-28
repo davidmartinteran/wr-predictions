@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, createContext, useContext } from "react";
+import { useState, useMemo, useCallback, useEffect, createContext, useContext, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Minus, Star, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { PlayerEntry } from "./page";
+import type { PlayerEntry, GroupHits } from "./page";
 
 type Category = "TOTAL" | "RESULTS" | "CLASSIFICATIONS" | "EXTRAS";
 
@@ -57,6 +57,7 @@ type Props = {
   showResults?: boolean;
   showExtras?: boolean;
   showBrackets?: boolean;
+  bracketBreakdown?: boolean;
 };
 
 function formatDeadline(iso: string): string {
@@ -65,7 +66,7 @@ function formatDeadline(iso: string): string {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline, showResults = true, showExtras = true, showBrackets = false }: Props) {
+export function LeaderboardClient({ poolId, poolName, players, playerCount, isLive, canViewOthers, deadline, showResults = true, showExtras = true, showBrackets = false, bracketBreakdown = false }: Props) {
   const visibleCats = useMemo(
     () =>
       SCORE_CATS.filter(
@@ -105,7 +106,7 @@ export function LeaderboardClient({ poolId, poolName, players, playerCount, isLi
     setExpandedId((prev) => (prev === userId ? null : userId));
   }, []);
 
-  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets };
+  const sharedProps = { poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets, bracketBreakdown };
 
   return (
     <CatsContext.Provider value={visibleCats}>
@@ -132,6 +133,7 @@ type LayoutProps = {
   canViewOthers: boolean;
   deadlineLabel: string;
   showBrackets: boolean;
+  bracketBreakdown: boolean;
 };
 
 // ─── Primitives ──────────────────────────────────────────────
@@ -277,9 +279,52 @@ function CategoryBar({ cat, value, expanded, onToggle, compact }: { cat: ScoreCa
   );
 }
 
+// Botón al desglose por equipos (bracket), bajo la barra de Clasificación.
+function BracketBreakdownLink({ href, compact }: { href: string; compact?: boolean }) {
+  return (
+    <a
+      href={href}
+      className={cn(
+        "block w-full rounded-lg font-medium border border-zinc-800 hover:bg-zinc-800/60 transition-colors flex items-center justify-center",
+        compact ? "mt-1 h-8 text-[11.5px] text-zinc-300" : "mt-1.5 h-9 text-[12.5px] text-zinc-200",
+      )}
+    >
+      Ver desglose por equipos →
+    </a>
+  );
+}
+
+// Rejilla compacta de aciertos por grupo (exactos · signos) para la porra total.
+function GroupHitsStrip({ hits, compact }: { hits: GroupHits[]; compact?: boolean }) {
+  if (!hits.length) return null;
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Aciertos por grupo</span>
+        <span className="flex items-center gap-2 text-[9px] text-zinc-500">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full" style={{ background: "#1B9E5B" }} />exactos</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />signos</span>
+        </span>
+      </div>
+      <div className={cn("grid gap-1", compact ? "grid-cols-4" : "grid-cols-6")}>
+        {hits.map((g) => (
+          <div key={g.group} className="flex items-center justify-between rounded-md border border-zinc-800/60 bg-zinc-900/40 px-1.5 py-1">
+            <span className="text-[10px] font-semibold text-zinc-500">{g.group}</span>
+            <span className="flex items-center gap-0.5 text-[10.5px] tabular-nums">
+              <span className="font-semibold" style={{ color: "#1B9E5B" }}>{g.exactos}</span>
+              <span className="text-zinc-700">·</span>
+              <span className="font-medium text-zinc-300">{g.signos}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Breakdown (expand) ──────────────────────────────────────
 
-function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean }) {
+function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets, bracketBreakdown }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean; bracketBreakdown: boolean }) {
   const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
@@ -289,20 +334,30 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBra
       ? `/pools/${poolId}/predictions`
       : `/pools/${poolId}/predictions?player=${player.userId}`;
   const cta = showBrackets ? "Ver bracket de" : "Ver porra de";
+  const bracketHref = bracketBreakdown && canView
+    ? `/pools/${poolId}/brackets?player=${player.userId}`
+    : undefined;
   return (
     <div className="px-3 pb-3 -mt-1">
       <div className="rounded-lg border border-zinc-800/60 p-3" style={{ background: "rgb(9 9 11 / 0.6)" }}>
         <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 mb-2.5">Desglose</div>
         <div className="space-y-2">
           {cats.map((c) => (
-            <CategoryBar
-              key={c.key}
-              cat={c}
-              value={player.scores[c.key]}
-              expanded={expandedCat === c.key}
-              onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
-              compact
-            />
+            <Fragment key={c.key}>
+              <CategoryBar
+                cat={c}
+                value={player.scores[c.key]}
+                expanded={expandedCat === c.key}
+                onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
+                compact
+              />
+              {c.key === "RESULTS" && canView && (
+                <GroupHitsStrip hits={player.groupHits} compact />
+              )}
+              {c.key === "CLASSIFICATIONS" && bracketHref && (
+                <BracketBreakdownLink href={bracketHref} compact />
+              )}
+            </Fragment>
           ))}
         </div>
         {canView ? (
@@ -322,7 +377,7 @@ function MobileBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBra
   );
 }
 
-function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean }) {
+function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBrackets, bracketBreakdown }: { player: PlayerEntry; poolId: string; canViewOthers: boolean; deadlineLabel: string; showBrackets: boolean; bracketBreakdown: boolean }) {
   const cats = useCats();
   const canView = player.isCurrentUser || canViewOthers;
   const [expandedCat, setExpandedCat] = useState<Category | null>(null);
@@ -331,6 +386,9 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBr
     : player.isCurrentUser
       ? `/pools/${poolId}/predictions`
       : `/pools/${poolId}/predictions?player=${player.userId}`;
+  const bracketHref = bracketBreakdown && canView
+    ? `/pools/${poolId}/brackets?player=${player.userId}`
+    : undefined;
   return (
     <div className="px-4 py-4 border-t border-zinc-800/60" style={{ background: "rgb(9 9 11 / 0.4)" }}>
       <div className="flex gap-8">
@@ -341,13 +399,20 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBr
           </div>
           <div className="space-y-2.5">
             {cats.map((c) => (
-              <CategoryBar
-                key={c.key}
-                cat={c}
-                value={player.scores[c.key]}
-                expanded={expandedCat === c.key}
-                onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
-              />
+              <Fragment key={c.key}>
+                <CategoryBar
+                  cat={c}
+                  value={player.scores[c.key]}
+                  expanded={expandedCat === c.key}
+                  onToggle={() => setExpandedCat(expandedCat === c.key ? null : c.key)}
+                />
+                {c.key === "RESULTS" && canView && (
+                  <GroupHitsStrip hits={player.groupHits} />
+                )}
+                {c.key === "CLASSIFICATIONS" && bracketHref && (
+                  <BracketBreakdownLink href={bracketHref} />
+                )}
+              </Fragment>
             ))}
           </div>
         </div>
@@ -389,7 +454,7 @@ function DesktopBreakdown({ player, poolId, canViewOthers, deadlineLabel, showBr
 
 // ─── Mobile Layout ───────────────────────────────────────────
 
-function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets }: LayoutProps) {
+function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets, bracketBreakdown }: LayoutProps) {
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
 
@@ -447,7 +512,7 @@ function MobileLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExp
                   </div>
                   <ChevronRight className={cn("w-3.5 h-3.5 text-zinc-600 transition-transform shrink-0", isOpen && "rotate-90")} />
                 </button>
-                {isOpen && <MobileBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} />}
+                {isOpen && <MobileBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} bracketBreakdown={bracketBreakdown} />}
               </div>
             );
           })}
@@ -490,7 +555,7 @@ function PodiumSlot({ player, rank, height, avatarSize, showStar }: {
 
 // ─── Desktop Layout ──────────────────────────────────────────
 
-function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets }: LayoutProps) {
+function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleExpand, poolName, playerCount, isLive, canViewOthers, deadlineLabel, showBrackets, bracketBreakdown }: LayoutProps) {
   const cats = useCats();
   const podium = sorted.slice(0, 3);
   const showPodium = metric === "TOTAL" && podium.length >= 3;
@@ -594,7 +659,7 @@ function DesktopLayout({ poolId, metric, setMetric, sorted, expandedId, toggleEx
                   </div>
                 </button>
 
-                {isOpen && <DesktopBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} />}
+                {isOpen && <DesktopBreakdown player={p} poolId={poolId} canViewOthers={canViewOthers} deadlineLabel={deadlineLabel} showBrackets={showBrackets} bracketBreakdown={bracketBreakdown} />}
               </div>
             );
           })}
