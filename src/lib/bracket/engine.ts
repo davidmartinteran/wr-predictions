@@ -292,10 +292,18 @@ export function buildBracketState(
 // Reutiliza la misma derivación de rondas siguientes que buildBracketState.
 
 export type RealR32Match = {
-  matchNumber: number; // fifaMatch en R32_MATCHUPS
+  matchNumber: number; // match_number del partido real de R32 (73..88)
   homeTeam: TeamInfo | null;
   awayTeam: TeamInfo | null;
 };
+
+// Orden OFICIAL del cuadro de R32: slot 0..15 → match_number. Es el
+// emparejamiento real de la FIFA (octavos = pares consecutivos). NO se usa
+// R32_MATCHUPS porque su estructura (la de la porra normal, ya cerrada con
+// predicciones hechas) no coincide con el cuadro oficial.
+const R32_OFFICIAL_SLOT_ORDER = [
+  73, 76, 75, 78, 81, 82, 83, 84, 74, 77, 79, 80, 85, 88, 86, 87,
+];
 
 export function buildBracketStateFromR32(
   realR32: RealR32Match[],
@@ -311,20 +319,20 @@ export function buildBracketStateFromR32(
 
   const byMatchNumber = new Map(realR32.map((m) => [m.matchNumber, m]));
 
-  // R32 en orden de slot (R32_MATCHUPS mapea slot ↔ fifaMatch/match_number)
-  for (const mu of [...R32_MATCHUPS].sort((a, b) => a.slot - b.slot)) {
-    const real = byMatchNumber.get(mu.fifaMatch);
+  // R32 en el orden OFICIAL del cuadro (slot → match_number).
+  for (let slot = 0; slot < R32_OFFICIAL_SLOT_ORDER.length; slot++) {
+    const real = byMatchNumber.get(R32_OFFICIAL_SLOT_ORDER[slot]);
     const homeTeam = real?.homeTeam ?? null;
     const awayTeam = real?.awayTeam ?? null;
 
-    const winnerId = knockoutPicks[`R32:${mu.slot}`];
+    const winnerId = knockoutPicks[`R32:${slot}`];
     let winner: TeamInfo | null = null;
     if (winnerId) {
       if (homeTeam?.id === winnerId) winner = homeTeam;
       else if (awayTeam?.id === winnerId) winner = awayTeam;
     }
 
-    matches.R32.push({ stage: "R32", slot: mu.slot, homeTeam, awayTeam, winner });
+    matches.R32.push({ stage: "R32", slot, homeTeam, awayTeam, winner });
   }
 
   // Rondas siguientes: idéntico a buildBracketState (cada slot lo alimentan los
